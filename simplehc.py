@@ -1,5 +1,5 @@
 
-import logging, time, socket, json, types # builtins
+import logging, time, socket, select, json, types, itertools # builtins
 log = logging.getLogger('simplehc')
 logging.basicConfig(level=logging.INFO)
 
@@ -45,6 +45,9 @@ class tcpsocket:
             if self.auto_reconnect:
                 self.connect()
                 return "" # empty line, since query protcol should not readline empty socket
+    def has_data(self):
+        rlist, wlist, xlist = select.select([self.s], [],[], 0)
+        return len(rlist) != 0
 
 class jsonlines(tcpsocket):
     "A socket that speaks dictionaries at front and JSON at back"
@@ -58,6 +61,9 @@ class jsonlines(tcpsocket):
         #try:
         return json.loads(super().read())
         #except json.JSONDecodeError as s:
+    def read_all(self):
+        while self.has_data():
+            yield self.read()
         
 class HybridControllerError(Exception):
     pass
@@ -80,12 +86,16 @@ class HybridController:
         envelope = dotdict(self.send(msg_type, msg))
         resp = dotdict(self.sock.read())
         if "error" in resp:
-            raise HybridControllerError(resp['error'])
+            raise HybridControllerError(resp)
         if resp.type == envelope.type:
             return resp.msg
         else:
             log.error(f"req(type={envelope.type}) received unexpected: {resp=}")
             return resp
+    
+    def slurp(self):
+        return list(self.sock.read_all())
+             
 
 if __name__ == "__main__":
     # simple example demonstrator
