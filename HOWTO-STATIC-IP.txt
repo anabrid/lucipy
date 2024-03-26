@@ -1,0 +1,20 @@
+im client:
+
+hc = HybridController("serial:/dev/ttyACM0")
+hc.query("update_settings", {'ethernet':{'use_dhcp': False }})
+hc.slurp()
+hc.query("reset", {'reboot':True})
+# invalidates hc, anyway
+
+in der bash:
+
+ifconfig enp45s0u1u1 192.168.1.50
+ping 192.168.1.100
+
+# we are online! :)
+
+
+
+
+
+
