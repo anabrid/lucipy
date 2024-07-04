@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 
+"""
+An Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC
+
+This is a minimal python client, making simple things simple. That means things
+like device managament is capable of the python REPL without headache, following
+the KISS principle.
+
+This client implementation does *not* feature strong typing, dataclasses,
+asynchronous functions. Instead, it implements a blocking API and tries to
+mimic the way how the Model-1 Hybrid Controller interface worked
+(the one in https://github.com/anabrid/pyanalog/).
+
+This is a single file implementation focussing on portability and minimal
+dependencies. If you have pyserial installed, it will be used, otherwise this
+also runs fine without.
+"""
+
+
 import logging, time, socket, select, json, types, itertools, urllib # builtins
 log = logging.getLogger('simplehc')
 logging.basicConfig(level=logging.INFO)
@@ -105,8 +123,20 @@ class jsonlines():
 class HybridControllerError(Exception):
     pass
 
-class HybridController:
-    def __init__(self, endpoint_url, auto_reconnect=True):
+class LUCIDAC:
+    """
+    This kind of class is known as *HybridController* in other codes.
+    """
+    def __init__(self, endpoint_url=None, auto_reconnect=True):
+        """
+        If no endpoint is given but the environment variable LUCIDAC_ENDPOINT
+        is set, this value is used.
+    
+        If neither an endpoint nor the environment variable is set, autodetection
+        is applied and the first connection is chosen. Note that if no LUCIDAC
+        is attached via USB serial, the zeroconf detection will require a few
+        hundred milliseconds, depending on your network.        """
+        
         url = urllib.parse.urlparse(endpoint_url)
         if url.scheme == "tcp": # tcp://192.168.1.2:5732
             socket = tcpsocket(url.hostname, url.port, auto_reconnect)
@@ -141,7 +171,10 @@ class HybridController:
     
     def slurp(self):
         return list(self.sock.read_all())
-             
+
+def detect():
+    "Tries to look for USB Teensies, then access the network if possible"
+    pass
 
 if __name__ == "__main__":
     # simple example demonstrator
