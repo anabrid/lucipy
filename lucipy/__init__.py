@@ -35,4 +35,13 @@ Paradigms and software technical goodies:
   This makes it super easy to get started.
 """
 
-from synchc import LUCIDAC
+from .synchc import LUCIDAC
+from .circuits import Circuit
+
+
+def detect():
+    """
+    Safe wrapper to try to import the detection code with a meaningful
+    error if libraries are missing
+    """
+    pass
