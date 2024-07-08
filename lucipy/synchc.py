@@ -1,8 +1,30 @@
 #!/usr/bin/env python3
 
-import logging, time, socket, select, json, types, itertools, urllib # builtins
-log = logging.getLogger('simplehc')
+"""
+An Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC
+
+This is a minimal python client, making simple things simple. That means things
+like device managament is capable of the python REPL without headache, following
+the KISS principle.
+
+This client implementation does *not* feature strong typing, dataclasses,
+asynchronous functions. Instead, it implements a blocking API and tries to
+mimic the way how the Model-1 Hybrid Controller interface worked
+(the one in https://github.com/anabrid/pyanalog/).
+
+This is a single file implementation focussing on portability and minimal
+dependencies. If you have pyserial installed, it will be used, otherwise this
+also runs fine without.
+"""
+
+# all this is only python standard library  :)
+import logging, time, socket, select, json, types, \
+    itertools, os, functools, collections
+log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
+
+from .detect import detect, Endpoint
+
 
 try:
     import serial
@@ -19,6 +41,7 @@ class dotdict(dict):
     __delattr__ = dict.__delitem__
 
 def has_data(fh):
+    "Peeks a file handle (checks for data without reading/consuming)"
     rlist, wlist, xlist = select.select([fh], [],[], 0)
     return len(rlist) != 0
 
@@ -105,17 +128,70 @@ class jsonlines():
 class HybridControllerError(Exception):
     pass
 
-class HybridController:
-    def __init__(self, endpoint_url, auto_reconnect=True):
-        url = urllib.parse.urlparse(endpoint_url)
-        if url.scheme == "tcp": # tcp://192.168.1.2:5732
-            socket = tcpsocket(url.hostname, url.port, auto_reconnect)
-        elif url.scheme == "serial": # serial:/dev/foo
-            socket = serialsocket(url.path)
-        else:
-            raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
+def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
+    url = Endpoint(endpoint_url).parse()
+    if url.scheme == "tcp": # tcp://192.168.1.2:5732
+        return tcpsocket(url.hostname, url.port) # TODO: Get auto_reconnect from a query string
+    elif url.scheme == "serial": # serial:/dev/foo
+        return serialsocket(url.path)
+    else:
+        raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
+
+class LUCIDAC:
+    ENDPOINT_ENV_NAME = "LUCIDAC_ENDPOINT"
+    # a list of commands which will be exposed as methods, for shorthands.
+    commands = """
+        ping help
+        reset_circuit set_circuit get_circuit
+        get_entities
+        start_run
+        one_shot_daq
+        manual_mode
+        net_get net_set net_reset net_status
+        login
+        lock_acquire lock_release
+        sys_ident sys_reboot
+    """.split()
+    
+    # Commands which can be memoized for a given endpoint/instance, makes
+    # it cheaper to call them repeatedly
+    memoizable = "get_entities sys_ident".split()
+    
+    
+    """
+    This kind of class is known as *HybridController* in other codes.
+    """
+    def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
+        """
+        If no endpoint is given but the environment variable LUCIDAC_ENDPOINT
+        is set, this value is used.
+    
+        If neither an endpoint nor the environment variable is set, autodetection
+        is applied and the first connection is chosen. Note that if no LUCIDAC
+        is attached via USB serial, the zeroconf detection will require a few
+        hundred milliseconds, depending on your network.        """
+        if not endpoint_url:
+            if self.ENDPOINT_ENV_NAME in os.environ:
+                endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
+            else:
+                endpoint_url = detect(only_one=True)
+                if not endpoint_url:
+                    raise ValueError("No endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
+                
+        socket = endpoint2socket(endpoint_url)
         self.sock = jsonlines(socket)
         self.req_id = 50
+        
+        if register_methods:
+            self.register_methods(self.commands, self.memoizable)
+        
+    def register_methods(self, commands, memoizable=[]):
+        # register commands
+        for cmd in commands:
+            shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
+            shorthand.__doc__ = f'Shorthand for query("{cmd}", msg)'
+            shorthand = types.MethodType(shorthand, self) # bind function
+            setattr(self, cmd, functools.cache(shorthand) if cmd in memoizable else shorthand)
     
     def __repr__(self):
         return f"HybridController(\"{self.sock.sock}\")"
@@ -128,6 +204,7 @@ class HybridController:
         return envelope
 
     def query(self, msg_type , msg={}):
+        "Sends a query and waits for the answer, returns that answer"
         envelope = dotdict(self.send(msg_type, msg))
         resp = dotdict(self.sock.read())
         if "error" in resp:
@@ -141,7 +218,6 @@ class HybridController:
     
     def slurp(self):
         return list(self.sock.read_all())
-             
 
 if __name__ == "__main__":
     # simple example demonstrator
@@ -149,7 +225,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--endpoint", help="Lucidac endpoint URL (such as tcp:/192.168.1.1:5732 or serial:/dev/ttyACM0)")
     args= parser.parse_args()
-    hc = HybridController(args.endpoint)
+    hc = LUCIDAC(args.endpoint)
     
     import IPython
     IPython.embed()
