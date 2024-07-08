@@ -64,8 +64,10 @@ class Endpoint:
   def __init__(self, endpoint):
     if isinstance(endpoint, Endpoint): # avoid nesting
       self.endpoint = endpoint.endpoint
-    else:
+    elif isinstance(endpoint, str):
       self.endpoint = endpoint
+    else:
+      raise ValueError(f"{endpoint} is not a string")
   
   def parse(self):
     return urllib.parse.urlparse(self.endpoint)
@@ -197,20 +199,24 @@ def detect(only_one=False, prefer_network=True, zeroconf_timeout=500) -> Endpoin
     """
     res = iter([]) # start with empty iterator
     
+    def try_only_one(res):
+        try:
+            return next(res, None)
+        except TypeError: # not an iterator
+            return None
+    
     if prefer_network:
-        res = chain(res, detect_network_teensys(zeroconf_timeout))
+        res = itertools.chain(res, detect_network_teensys(zeroconf_timeout))
         if not only_one: yield from res
-        elif isinstance(res, collections.Iterable): return next(res)
-        elif only_one: return None
+        else: return try_only_one(res)
 
     res = detect_usb_teensys()
 
     if not prefer_network:
-        res = chain(res, detect_network_teensys(zeroconf_timeout))
+        res = itertools.chain(res, detect_network_teensys(zeroconf_timeout))
         
     if not only_one: yield from res
-    elif isinstance(res, collections.Iterable): return next(res)
-    elif only_one: return None
+    else: return try_only_one(res)
 
 if __name__ == '__main__':
     #logging.basicConfig(level=logging.INFO)
