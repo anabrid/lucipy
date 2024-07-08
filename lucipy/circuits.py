@@ -1,3 +1,21 @@
+#!/usr/bin/env python3
+
+"""
+Lucipy Circuits: A shim over the routes.
+
+This class structure provides a minimal level of user-friendlyness to allow
+route-based programming on the LUCIDAC. This effectively means a paradigm
+where one connects elements from math blocks to each other, with a coefficient
+inbetween. And the assignment throught the UCI matrix is done greedily by
+"first come, first serve" without any constraints.
+
+The code is heavily inspired by the LUCIGUI lucisim typescript compiler,
+which is however much bigger and creates an AST before mapping.
+
+In contrast, the approach demonstrated here is not even enough for REV0 connecting
+ExtIn/ADC/etc. But it makes it very simple and transparent to work with routes
+and setup the circuit configuration low level.
+"""
 
 import functools, operator
 from collections import namedtuple
@@ -8,11 +26,24 @@ flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
 find = lambda crit, default, lst: next((x for x in lst if crit(x)), default)
 
 def next_free(occupied: list[bool], append_to:int=None) -> int|None:
-    "Looks for the first False value within a list of truth values"
+    """
+    Looks for the first False value within a list of truth values.
+
+    >>> next_free([1,1,0,1,0,0]) # using ints instead of booleans for brevety
+    2
+
+    If no more value is free in list, it can append up to a given value
+
+    >>> next_free([True]*4, append_to=3) # None, nothing free
+    >>> next_free([True]*4, append_to=6)
+    4
+    """
     for idx, val in enumerate(occupied):
         if not val:
             return idx
     return len(occupied) if append_to != None and len(occupied) < append_to else None
+
+# "in" is a reserved keyword in python, so all inputs are called a,b,c,... even if there is ony one
 
 Int = namedtuple("Int", ["id", "out", "a"])
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])
@@ -22,40 +53,68 @@ class DefaultLUCIDAC:
     num_int = 8
     num_mul = 4
 
-def default_reservoir():
-    return {
-        Int: [None]*DefaultLUCIDAC.num_int,
-        Mul: [None]*DefaultLUCIDAC.num_mul,
-    }
+    @staticmethod
+    def reservoir(default_value=False):
+        return {
+            Int: [default_value]*DefaultLUCIDAC.num_int,
+            Mul: [default_value]*DefaultLUCIDAC.num_mul,
+        }
+    
+    @staticmethod
+    def make(t:Ele, idx):
+        """
+        A factory for the actual elements.
+    
+        >>> Reservoir().make(Int, 1)
+        Int(id=1, out=1, a=1)
+        >>> Reservoir().make(Mul, 3)
+        Mul(id=3, out=3, a=6, b=7)
+        """
+        if t == Int:
+            return Int(idx,idx,idx)
+        if t == Mul:
+            return Mul(idx,idx, 2*idx, 2*idx+1)
+    
 
 class Reservoir:
     """
     This is basically the entities list, tracking which one is already
     handed out ("allocated") or not.
+
+    Note that the Mul/Int classes only hold some integers. In contrast, the
+    configurable properties of the stateful computing element (Integrator)
+    is managed by the MIntBlock class below.
     """
     allocated: dict[Ele,list[bool]]
     
     def __init__(self, allocation=None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         # an idea was to look that up as in luci.get_entities(), however now we keep it simple
-        self.allocated = default_reservoir() if not allocation else allocation
-        
-    def make(self, t:Ele, idx):
-        if t == Int:
-            return Int(idx,idx,idx)
-        if t == Mul:
-            return Mul(idx,idx, 2*idx, 2*idx+1)
+        self.allocated = DefaultLUCIDAC.reservoir() if not allocation else allocation
+
 
     def alloc(self, t:Ele, id=None):
+        """
+        Allocate computing elements.
+        
+        >>> r = Reservoir()
+        >>> r.alloc(Int,1)
+        Int(id=1, out=1, a=1)
+        >>> r.alloc(Int)
+        Int(id=0, out=0, a=0)
+        >>> r.alloc(Int)
+        Int(id=2, out=2, a=2)
+        """
         try:
             lst = self.allocated[t]
-            idx = lst[id] if id != None else next_free(lst)
+            idx = id if id != None else next_free(lst)
             if idx == None:
                 raise ValueError(
                     f"No more free Computing Elements for type {t}, all {len(lst)} occupied!"
                     if id != None else
                     f"Compute Element {t} number {id} is already allocated")
-            return self.make(t, idx)
+            self.allocated[t][idx] = True
+            return DefaultLUCIDAC.make(t, idx)
         except KeyError:
             raise TypeError(f"Computing Element Type {t} not supported. Valid ones are {', '.join(map(str, self.allocated.keys()))}")
         except IndexError:
@@ -85,6 +144,12 @@ def Connection(source:Ele|int, target:Ele|int, weight=1):
     """
     Transforms an argument list somewhat similar to a "logical route" in the
     lucicon code to a physical route.
+        
+    >>> r = Reservoir()
+    >>> I1, M1 = r.int(), r.mul()
+    >>> Connection(M1.a, I1)
+    Route(uin=0, lane=None, coeff=1, iout=0)
+
     """
     if isinstance(source, get_args(Ele)):
         source = source.out
@@ -123,6 +188,10 @@ class MIntBlock:
 
 
 class Routing:
+    """
+    This class provides a route-tuple like interface to the UCI block and
+    generates the Output-centric matrix configuration at the end.
+    """
     max_lanes = 32
     routes : list[Route]
     
@@ -192,20 +261,24 @@ class Routing:
 
 class Circuit(Reservoir, MIntBlock, Routing):
     """
-    Just convenience!
+    A one stop-shop of a compiler! This class collects all independent behaviour in a neat
+    single-class interface. This allows it, for instance, to provide an improved version of
+    the Reservoir's int() method which also sets the Int state in one go.
+    It also can generate the final configuration format required for LUCIDAC.
     """
     
     def __init__(self, routes: list[Route] = []):
         super().__init__(routes=routes)
     
     def int(self, id=None, ic=0, slow=False):
-        "Convenience"
+        "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
         el = Reservoir.int(self, id)
         self.set_ic(el, ic)
         self.set_k0(el, MIntBlock.slow if slow else MIntBlock.fast)
         return el
     
     def generate(self):
+        "Returns the data structure required by the LUCIDAC set_config call"
         config = {
             "/0": {
                 "/M0": {
@@ -225,34 +298,3 @@ class Circuit(Reservoir, MIntBlock, Routing):
     
     def write(self, hc):
         hc.set_config(self.generate())
-
-
-"""
-#### USAGE: ###
-
-
-c = Circuit()
-
-I1 = c.int() # allocates an integrator
-M1 = c.mul(2) # allocates multiplier 2
-
-c.set_ic(I1, 12)
-c.set_k0(I1, 1e4)
-
-# returns Route(I1.out, laneidx++, coeff=10, M1.a)
-c.connect(I1, M1.a, weight=10)
-c.connect(...)
-
-c.configure(hc)
-
-# Alternative:
-problem = [
-    Connection(I1, I2),
-    Connection(I1, M1.a, 2.0)
-]
-
-Routing(problem1).write(hc)
-
-
-# Usage like:
-"""
