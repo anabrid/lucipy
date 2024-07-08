@@ -39,7 +39,7 @@ vv  = lambda msg: log(2, msg)
 
 
 # python included
-import dataclasses, urllib
+import dataclasses, urllib, re
 
 @dataclasses.dataclass() # frozen=True
 class Endpoint:
@@ -56,10 +56,7 @@ class Endpoint:
   "localhost"
   """
   endpoint: str # just the whole string
-  #scheme: str # transport method, such as http, tcp, etc.
-  #netloc: str # username:password@hostname:port
-  #authority: str # netloc, such as "lucidac-AA-BB-CC", "foobar" or "192.168.1.2", including ":port" at end
-  #path: Optional[str] # also collects params, query, fragment
+  default_tcp_port = 5732
   
   def __init__(self, endpoint):
     if isinstance(endpoint, Endpoint): # avoid nesting
@@ -70,7 +67,19 @@ class Endpoint:
       raise ValueError(f"{endpoint} is not a string")
   
   def parse(self):
+    "This is likely to fail for serial:/ things"
     return urllib.parse.urlparse(self.endpoint)
+
+  def asDevice(self) -> str|None:
+    "Returns device name if device, else None"
+    posix = re.match("serial:/?(/.+)", self.endpoint)
+    win = re.match("serial:/?/(.+)", self.endpoint)
+    if posix: return posix.group(1)
+    if win: return win.group(1)
+    return None
+
+  def asURL(self):
+    return self.parse()
   
   @staticmethod
   def fromDevice(device_name):
@@ -120,7 +129,7 @@ class ZeroconfDetector:
                 # Most Windows, Mac OS and Linux systems can do it, some (in particular Linux) cannot.
                 addr = info.server if can_resolve_to(info.server, expected_ip=addr) else addr
                 endpoint = Endpoint.fromJSONL(addr, info.port)
-                if self.infinite:
+                if self.timeout_ns == 0:
                     print(endpoint)
                 else:
                     self.results.append(endpoint)
@@ -137,8 +146,9 @@ class ZeroconfDetector:
         )
         
         started = time.time_ns()
-        while time.time_ns() - started < self.timeout_ns: # or len(self.results) < 1:
-            await asyncio.sleep(.05)
+        while 0 == self.timeout_ns or (time.time_ns() - started) < self.timeout_ns: # or len(self.results) < 1:
+            print("waiting...")
+            await asyncio.sleep(.5)
         
         return self.results
         
@@ -161,7 +171,7 @@ class ZeroconfDetector:
             return self.results
 
 
-def detect_usb_teensys() -> Iterator[Endpoint]:
+def detect_usb_teensys() -> list[Endpoint]:
     "Yields all found endpoints on local system using serial.tools.list_ports, requires pyserial"
     teensy_vid = 0x16C0
     teensy_pid = 0x0483
@@ -169,54 +179,48 @@ def detect_usb_teensys() -> Iterator[Endpoint]:
     if not serial:
         raise ModuleNotFoundError("lucipy.detect.detect_usb_teensys for USB requires pyserial, install with 'pip install pyserial'")
     
+    found = []
     for port in serial.tools.list_ports.comports(): 
         if port.pid == teensy_pid and port.vid == teensy_vid:
             v(f"Serial device at {port.device} - {port.hwid}") # sth like "USB VID:PID=16C0:0483 SER=15240110 LOCATION=1-3:1.0"
-            yield Endpoint.fromDevice(port.device) # sth like "/dev/ttyACM0" at Linux/Mac
+            found.append(Endpoint.fromDevice(port.device)) # sth like "/dev/ttyACM0" at Linux/Mac
             
     # TODO: Has to connect and make sure it is a Teensy belonging to a LUCIDAC
     #       and not to something else. i.e. make sure it speaks the JSONL protocol.
+    
+    return found
 
-def detect_network_teensys(zeroconf_timeout=500) -> Iterator[Endpoint]:
+def detect_network_teensys(zeroconf_timeout=500) -> list[Endpoint]:
     "Yields all endpoints in the local broadcast domain using Zeroconf, requires python zeroconf package"
     if not Zeroconf:
         raise ModuleNotFoundError("lucipy.detect.detect_network_teensys requires zeroconf, install with 'pip install zeroconf'")
     
-    z = ZeroconfDetector(zeroconf_timeout)
-    for x in z.sync_start():
-        yield x
+    return ZeroconfDetector(zeroconf_timeout).sync_start()
 
-def detect(only_one=False, prefer_network=True, zeroconf_timeout=500) -> Endpoint | None | Iterator[Endpoint]:
+def detect(single=False, prefer_network=True, zeroconf_timeout=500) -> Endpoint | None | list[Endpoint]:
     """
     Yields or returns possible endpoints.
 
-    @arg only_one Return only one found instance or None, if nothing found. If this
+    @arg single Return only one found instance or None, if nothing found. If this
          option is False, this function will return an iterator, i.e. behave as generator.
     @arg zeroconf_timeout Maximum search time: How long to wait for zeroconf answers,
          in milliseconds. Set to 0 or None for unlimited search.
     @arg prefer_network Yield network result first. Typically a TCP/IP connection is
          faster and more reliable then the USBSerial.
     """
-    res = iter([]) # start with empty iterator
-    
-    def try_only_one(res):
-        try:
-            return next(res, None)
-        except TypeError: # not an iterator
-            return None
-    
+    res = []
+    singlize = lambda res: (res[0] if len(res) else None) if single else res
     if prefer_network:
-        res = itertools.chain(res, detect_network_teensys(zeroconf_timeout))
-        if not only_one: yield from res
-        else: return try_only_one(res)
-
-    res = detect_usb_teensys()
-
+        res += detect_network_teensys(zeroconf_timeout)
+    if single and len(res):
+        return singlize(res)
+    if True:
+        res += detect_usb_teensys()
+    if single and len(res):
+        return singlize(res)
     if not prefer_network:
-        res = itertools.chain(res, detect_network_teensys(zeroconf_timeout))
-        
-    if not only_one: yield from res
-    else: return try_only_one(res)
+        res += detect_network_teensys(zeroconf_timeout)
+    return singlize(res)
 
 if __name__ == '__main__':
     #logging.basicConfig(level=logging.INFO)

@@ -101,7 +101,7 @@ class serialsocket:
         # block until have read exactly one line
         while self.has_data():
             ret = self.fh.readline()
-            print(f"Have read: {ret}")
+            #print(f"Have read: {ret}")
             return ret
     def has_data(self):
         return has_data(self.fh)
@@ -118,8 +118,12 @@ class jsonlines():
     def send(self, sth):
         self.sock.send(json.dumps(sth))
     def read(self, *args, **kwargs):
-        #try:
-        return json.loads(self.sock.read(*args, **kwargs))
+        read = self.sock.read(*args, **kwargs)
+        if not read:
+            print("haven't read anything, trying again")
+            read = self.sock.read(*args, **kwargs)
+
+        return json.loads(read)
         #except json.JSONDecodeError as s:
     def read_all(self):
         while self.sock.has_data():
@@ -129,15 +133,21 @@ class HybridControllerError(Exception):
     pass
 
 def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
-    url = Endpoint(endpoint_url).parse()
-    if url.scheme == "tcp": # tcp://192.168.1.2:5732
-        return tcpsocket(url.hostname, url.port) # TODO: Get auto_reconnect from a query string
-    elif url.scheme == "serial": # serial:/dev/foo
-        return serialsocket(url.path)
+    endpoint = Endpoint(endpoint_url)
+    if endpoint.asDevice(): # serial:/dev/foo
+        return serialsocket(endpoint.asDevice())
+    elif endpoint.asURL().scheme == "tcp": # tcp://192.168.1.2:5732
+        url = endpoint.asURL()
+        tcp_port = endpoint.default_tcp_port if not url.port else url.port
+        return tcpsocket(url.hostname, tcp_port) # TODO: Get auto_reconnect from a query string
     else:
         raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
 
 class LUCIDAC:
+    """
+    This kind of class is known as *HybridController* in other codes.
+    """
+    
     ENDPOINT_ENV_NAME = "LUCIDAC_ENDPOINT"
     # a list of commands which will be exposed as methods, for shorthands.
     commands = """
@@ -158,9 +168,6 @@ class LUCIDAC:
     memoizable = "get_entities sys_ident".split()
     
     
-    """
-    This kind of class is known as *HybridController* in other codes.
-    """
     def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
         """
         If no endpoint is given but the environment variable LUCIDAC_ENDPOINT
@@ -174,7 +181,7 @@ class LUCIDAC:
             if self.ENDPOINT_ENV_NAME in os.environ:
                 endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
             else:
-                endpoint_url = detect(only_one=True)
+                endpoint_url = detect(single=True)
                 if not endpoint_url:
                     raise ValueError("No endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
                 
@@ -194,7 +201,7 @@ class LUCIDAC:
             setattr(self, cmd, functools.cache(shorthand) if cmd in memoizable else shorthand)
     
     def __repr__(self):
-        return f"HybridController(\"{self.sock.sock}\")"
+        return f"LUCIDAC(\"{self.sock.sock}\")"
     
     def send(self, msg_type, msg={}):
         "Sets up an envelope and sends it, but does not wait for reply"
@@ -207,6 +214,9 @@ class LUCIDAC:
         "Sends a query and waits for the answer, returns that answer"
         envelope = dotdict(self.send(msg_type, msg))
         resp = dotdict(self.sock.read())
+        if envelope == resp:
+            # This is a serial socket replying first what was typed. Read another time.
+            resp = dotdict(self.sock.read())
         if "error" in resp:
             raise HybridControllerError(resp)
         if resp.type == envelope.type:
