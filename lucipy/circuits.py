@@ -24,6 +24,7 @@ from typing import get_args
 # like sum(lst, []) but accepts generators instead of lists
 flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
 find = lambda crit, default, lst: next((x for x in lst if crit(x)), default)
+clean = lambda itm: [ k[0] if len(k)==1 else (None if len(k)==0 else k) for k in itm ]
 
 def next_free(occupied: list[bool], append_to:int=None) -> int|None:
     """
@@ -230,18 +231,19 @@ class Routing:
     def routes2matrix(routes):
         "AoS->SoA Reduced Matrix (=input) representation, as in lucidon/mapping.ts"
         return dict(
-            u=flatten((r.uin  if r.lane == lane else None for r in routes) for lane in range(32)),
-            i=flatten((r.iout if r.lane == lane else None for r in routes) for lane in range(32)),
+            u=clean([r.uin  for r in routes if r.lane == lane] for lane in range(32)),
+            i=clean([r.iout for r in routes if r.lane == lane] for lane in range(32)),
             c=[x.lane if x else 0 for x in (find(lambda r: r.lane == lane, None, routes) for lane in range(32))]
         )
     
     @staticmethod
     def input2output(inmat, keep_arrays=False):
         "Maps Array<int,32> onto Array<Array<int>|int, 16>"
-        output = [[]]*16 # Array<Array, 16>
+        output = [[] for _ in range(16)] # Array<Array, 16>
         for lane, clane in enumerate(inmat):
-            output[clane].append(lane)
-        return output if keep_arrays else [ k[0] if len(k)==1 else (None if len(k)==0 else k) for k in output ]
+            if clane != None:
+                output[clane].append(lane)
+        return output if keep_arrays else clean(output)
         
 
     def generate(self):

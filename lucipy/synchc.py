@@ -19,9 +19,12 @@ also runs fine without.
 
 # all this is only python standard library  :)
 import logging, time, socket, select, json, types, \
-    itertools, urllib, os, functools
+    itertools, os, functools, collections
 log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
+
+from .detect import detect, Endpoint
+
 
 try:
     import serial
@@ -125,8 +128,8 @@ class jsonlines():
 class HybridControllerError(Exception):
     pass
 
-def endpoint2socket(endpoint_url:str) -> tcpsocket|serialsocket:
-    url = urllib.parse.urlparse(endpoint_url)
+def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
+    url = Endpoint(endpoint_url).parse()
     if url.scheme == "tcp": # tcp://192.168.1.2:5732
         return tcpsocket(url.hostname, url.port) # TODO: Get auto_reconnect from a query string
     elif url.scheme == "serial": # serial:/dev/foo
@@ -171,8 +174,10 @@ class LUCIDAC:
             if self.ENDPOINT_ENV_NAME in os.environ:
                 endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
             else:
-                from . import detect # grab safe import warpper from __init__
-                endpoint_url = detect()
+                endpoint_url = detect(only_one=True)
+                if not endpoint_url:
+                    raise ValueError("No endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
+                
         socket = endpoint2socket(endpoint_url)
         self.sock = jsonlines(socket)
         self.req_id = 50

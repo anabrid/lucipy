@@ -35,13 +35,10 @@ Paradigms and software technical goodies:
   This makes it super easy to get started.
 """
 
+
+
+
+# the three major entrypoints for the library:
 from .synchc import LUCIDAC
 from .circuits import Circuit
-
-
-def detect():
-    """
-    Safe wrapper to try to import the detection code with a meaningful
-    error if libraries are missing
-    """
-    pass
+from .detect import Endpoint, detect
