@@ -38,6 +38,7 @@ class dotdict(dict):
     __delattr__ = dict.__delitem__
 
 def has_data(fh):
+    "Peeks a file handle (checks for data without reading/consuming)"
     rlist, wlist, xlist = select.select([fh], [],[], 0)
     return len(rlist) != 0
 
@@ -182,8 +183,8 @@ class LUCIDAC:
     def register_methods(self, commands, memoizable=[]):
         # register commands
         for cmd in commands:
-            shorthand = lambda self, msg={}: self.query(cmd, msg)
-            shorthand.__doc__ = f'Shorthand for ...query("{cmd}", msg)'
+            shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
+            shorthand.__doc__ = f'Shorthand for query("{cmd}", msg)'
             shorthand = types.MethodType(shorthand, self) # bind function
             setattr(self, cmd, functools.cache(shorthand) if cmd in memoizable else shorthand)
     
