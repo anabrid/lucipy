@@ -1,4 +1,7 @@
-# An Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC
+# Lucipy: The simple LUCIDAC python client
+
+Installation: `pip install lucipy` or just clone the repository (which is just online
+at https://github.com/anabrid/lucipy) and import the `lucipy` directory.
 
 This is a minimal python client, making simple things simple. That means things
 like device managament is capable of the python REPL without headache:
@@ -40,5 +43,25 @@ INFO:simplehc:Connecting to TCP 192.168.68.60:5732...
    'isFullDuplex': True}}}
 > 
 ```
+
+The code was formerly known as "Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC"
+(shcpy). It differs from the [pybrid-computing](https://pypi.org/project/pybrid-computing/)
+code as it is much simpler:
+
+* near to no dependencies
+* no async
+* no typing
+* not a framework
+
+In contrast, lucipy ships
+
+* a simple usable hybrid controller class
+* a bit of syntactic sugar for route-based analog circuit programming
+* Routines for device autodiscovery with zeroconf and USB Serial detection
+
+This makes lucipy ideally suited to be used interactively in IPython and Jupyter Notebooks.
+
+Lucipy is 20 times smaller then pybrid (4 files instead of 80,
+800SLOC instead of 16,000).
 
 The repo also contains an Over-The-Air demo updater client.

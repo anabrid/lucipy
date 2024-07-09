@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lucipy"
+requires-python = ">=3.8" # 3.9 was released in 2020, don't depend on that
+dynamic = ["version"]
+description = "Client library for the LUCIDAC analog digital hybrid computer"
+authors = [
+  {name = "The Analog Geeks", email = "pybrid-code@anabrid.com"}
+]
+readme = "README.md"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: End Users/Desktop",
+  "Topic :: Communications",
+  "Topic :: Scientific/Engineering :: Interface Engine/Protocol Translator",
+  "Topic :: Software Development :: Embedded Systems",
+  "Topic :: Terminals :: Serial",
+  "Operating System :: POSIX"
+]
+
+[tool.setuptools]
+packages = ["lucipy"]
+
+[project.license]
+text = "SPDX-License-Identifier: MIT OR GPL-2.0-or-later"
+
+[project.urls]
+Homepage = "https://anabrid.com/"
+Documentation = "https://anabrid.dev/docs/lucipy/"
+Repository = "https://github.com/anabrid/lucipy"
+
+[project.optional-dependencies]
+serial = [
+  "pyserial>=3.5"
+]
+detection = [
+  "zeroconf>=0.63.0"
+]
