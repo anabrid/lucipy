@@ -116,6 +116,7 @@ class jsonlines():
     def makeSocket(cls, actual_socket_type, *args, **kwargs):
         return cls(actual_socket_type(*args, **kwargs))
     def send(self, sth):
+        print(f"jsonlines.send({json.dumps(sth)}")
         self.sock.send(json.dumps(sth))
     def read(self, *args, **kwargs):
         read = self.sock.read(*args, **kwargs)

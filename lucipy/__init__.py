@@ -40,5 +40,5 @@ Paradigms and software technical goodies:
 
 # the three major entrypoints for the library:
 from .synchc import LUCIDAC
-from .circuits import Circuit
+from .circuits import Circuit, Route, Connection
 from .detect import Endpoint, detect

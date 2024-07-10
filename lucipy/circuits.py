@@ -218,7 +218,7 @@ class Routing:
         if route.lane == None:
             physical = Route(route.uin, self.next_free_lane(), route.coeff, route.iout)
         else:
-            if route.lane in [ r.lane for r in routes ]:
+            if route.lane in [ r.lane for r in self.routes ]:
                 raise ValueError("Cannot append {route} because this lane is already occupied.")
             physical = route
         self.routes.append(physical)
@@ -231,18 +231,22 @@ class Routing:
     def routes2matrix(routes):
         "AoS->SoA Reduced Matrix (=input) representation, as in lucidon/mapping.ts"
         return dict(
-            u=clean([r.uin  for r in routes if r.lane == lane] for lane in range(32)),
+            u=clean([[r.uin  for r in routes if r.lane == lane] for lane in range(32)]),
             i=clean([r.iout for r in routes if r.lane == lane] for lane in range(32)),
-            c=[x.lane if x else 0 for x in (find(lambda r: r.lane == lane, None, routes) for lane in range(32))]
+            c=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, routes) for lane in range(32))]
         )
     
     @staticmethod
-    def input2output(inmat, keep_arrays=False):
+    def input2output(inmat, keep_arrays=True):
         "Maps Array<int,32> onto Array<Array<int>|int, 16>"
         output = [[] for _ in range(16)] # Array<Array, 16>
         for lane, clane in enumerate(inmat):
             if clane != None:
-                output[clane].append(lane)
+                if isinstance(clane, list):
+                    for ci in clane:
+                        output[ci].append(lane)
+                else:
+                    output[clane].append(lane)
         return output if keep_arrays else clean(output)
         
 
@@ -255,7 +259,7 @@ class Routing:
         return {
             "/U": dict(outputs = mat["u"]),
             "/C": dict(elements =  mat["c"]),
-            "/I": dict(outputs = self. input2output(mat["i"]))
+            "/I": dict(outputs = self.input2output(mat["i"]))
         }
         # TODO: Ublock Altsignals, where in REV1?
         # ret["/U"]["alt_signals"] = [False]*8
@@ -283,9 +287,7 @@ class Circuit(Reservoir, MIntBlock, Routing):
         "Returns the data structure required by the LUCIDAC set_config call"
         config = {
             "/0": {
-                "/M0": {
-                    "elements": MIntBlock.generate(self)
-                },
+                "/M0": MIntBlock.generate(self),
                 "/M1": {},
             }
         }
@@ -299,4 +301,4 @@ class Circuit(Reservoir, MIntBlock, Routing):
         }
     
     def write(self, hc):
-        hc.set_config(self.generate())
+        hc.set_circuit(self.generate())
