@@ -10,7 +10,7 @@ def get_version():
         #build = exec("git rev-parse --short HEAD") # something like "1f61552"
         #return f"{ver}+g{build}"
         return ver
-    except FileNotFoundError: # no git installed
+    except (subprocess.CalledProcessError, FileNotFoundError): # no git installed
         return "v0.0.0+N/A-without-git"
 
 setuptools.setup(

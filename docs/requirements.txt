@@ -1,0 +1,7 @@
+# for sphinx
+sphinx-rtd-theme
+#sphinxcontrib-programoutput
+#recommonmark
+#nbsphinx
+#ipython
+#sphinxcontrib-svg2pdfconverter
