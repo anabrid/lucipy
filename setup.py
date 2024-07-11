@@ -11,7 +11,7 @@ def get_version():
         #return f"{ver}+g{build}"
         return ver
     except (subprocess.CalledProcessError, FileNotFoundError): # no git installed
-        return "v0.1.123+N/A-without-git"
+        return "v0.1.1234"
 
 setuptools.setup(
     name="lucipy",
