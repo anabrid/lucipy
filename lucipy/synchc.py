@@ -144,13 +144,54 @@ def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
     else:
         raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
 
+
+class Run:
+    "Represents a running Run"
+    run_states = "DONE ERROR IC NEW OP OP_END QUEUED TAKE_OFF TMP_HALT".split()
+    
+    @staticmethod
+    def is_state(state:int, comparison:str):
+        return Run.run_states.index(comparison) == state
+    
+    def __init__(self, hc):
+        self.hc = hc
+    
+    def data(self) -> types.Generator[list[float]]:
+        """
+        "Slurp" all data aquisition from the run. Basically a "busy wait" or
+        "synchronous wait" until the run finishes.
+        data() returns once the run is stopped and yields data otherwise.
+        Therefore usage can be just like `list(hc.run().data())`
+        """
+        envelope = hc.sock.read()
+        if envelope["type"] == "run_data":
+            # TODO check for proper run id and entity.
+            msg_data = envelope["msg"]["data"];
+            yield msg_data
+        elif envelope["type"] == "run_state_change":
+            # should assert for line['old'] == state.
+            state = envelope["new"];
+            try:
+                if !(self.is_state(state, "DONE") || self.is_sate(state, "ERROR")):
+                    return
+            except ValueError:
+                print(f"Unknown state in {envelope}")
+            # Attention: After runstate stop there still can come a last data
+            #            package.
+        else:
+            print(f"Run::slurp(): Unexpected message {envelope}")
+            return # stop slurping
+
 class LUCIDAC:
     """
     This kind of class is known as *HybridController* in other codes.
     """
-    
+   
     ENDPOINT_ENV_NAME = "LUCIDAC_ENDPOINT"
+    
     # a list of commands which will be exposed as methods, for shorthands.
+
+    # TODO: Maybe write more verbose as in pyanalog in order to have a more usable documentation!
     commands = """
         ping help
         reset_circuit set_circuit get_circuit
@@ -167,7 +208,6 @@ class LUCIDAC:
     # Commands which can be memoized for a given endpoint/instance, makes
     # it cheaper to call them repeatedly
     memoizable = "get_entities sys_ident".split()
-    
     
     def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
         """
@@ -190,16 +230,36 @@ class LUCIDAC:
         self.sock = jsonlines(socket)
         self.req_id = 50
         
+        "Eth Mac address of Microcontroller, required for the circuit entity hierarchy"
+        self.hc_mac = None
+        # TODO: Maybe change firmware once in a way that it doesn't really need the client to know it
+        
+        "Storage for stateful preparation of runs."
+        self.run_config = dotdict(
+            halt_on_external_trigger = False,
+            halt_on_overload  = True,
+            ic_time = 50000, # ns 
+            op_time = 900_000_000, # # ns
+        )
+
+        "Storage for stateful preparation of runs."
+        self.daq_config = dotdict()
+        
         if register_methods:
             self.register_methods(self.commands, self.memoizable)
         
-    def register_methods(self, commands, memoizable=[]):
-        # register commands
+    def register_methods(self, commands, memoizable=[], overwrite=False):
+        """
+        register method shorthands. Typically this method is only used by __init__.
+        """
         for cmd in commands:
             shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
             shorthand.__doc__ = f'Shorthand for query("{cmd}", msg)'
             shorthand = types.MethodType(shorthand, self) # bind function
-            setattr(self, cmd, functools.cache(shorthand) if cmd in memoizable else shorthand)
+            if cmd in memoizable:
+                shorthand = functools.cache(shorthand)
+            if not hasattr(self, cmd) or overwrite:
+                setattr(self, cmd, shorthand)
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"
@@ -229,6 +289,153 @@ class LUCIDAC:
     
     def slurp(self):
         return list(self.sock.read_all())
+    
+    def get_mac(self):
+        "Get system ethernet mac address. Is cached."
+        return self.hc_mac if self.hc_mac else self.get_entities()
+    
+    def get_entities(self):
+        "Gets entities and determines system Mac address"
+        entities = self.query("get_entities")["entities"]
+        mac = list(entities.keys())[0]
+        # todo, assert that all this went fine, i.e. no KeyErrors or similar
+        assert self.hc_mac == None or mac == self.hc_mac, "Inconsistent device mac"
+        self.hc_mac = mac
+        return entities
+
+    @staticmethod
+    def determine_idal_ic_time_from_k0s(mIntConfig):
+        """
+        Given a MIntBlock configuration, which looks like [{k:1000,ic:...},{k:10000,ic:...}...],
+        determines the ideal ic time, in nanoseconds
+        """
+        def isFast(k0):
+            fast_k0 = 10_000
+            slow_k0 =  1_000
+            if k0 == fast_k0: return True
+            if k0 == slow_k0: return False
+            else:             return True # is default at firmware side
+        
+        # TODO, insert correct values here
+        fast_ic_time =  99_999 # ns
+        slow_ic_time = 999_999 # ns
+        areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
+        return fast_ic_time if all(areKfast) else slow_ic_time
+    
+    def set_config(self, config):
+        """
+        config being something like dict("/U": ..., "/C": ...), i.e. the entities
+        for a single cluster. There is only one cluster in LUCIDAC.
+        
+        Note: This also determines the ideal IC time *if* that has not been set
+              before (either manually or in a previous run).
+        """
+        cluster_index = 0
+        outer_config = {
+            "entity": [self.get_mac(), str(cluster_index)],
+            "config": config
+        }
+        
+        if "/M0" in config and not "ic_time" in self.run_config:
+            self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
+        
+        return hc.query("set_config", outer_config)
+    
+    def set_circuit(self, circuit):
+        "set_config was renamed to set_circuit in later firmware versions"
+        return self.set_config()
+    
+    
+    def set_op_time(self, *, ns=0, us=0, ms=0):
+        """
+        Sets OP-Time with clear units. Returns computed value, which is just the sum of
+        all arguments set.
+        
+        Consider the limitations reported in :ref:start_run.
+        
+        Note that this function signature is somewhat comparable to python builtin
+        `datetime.timedelta <https://docs.python.org/3/library/datetime.html#timedelta-objects>`,
+        however Python's timedelta has only microseconds resolution which is not enough
+        for the LUCIDAC timing (at least this is what some people say ;) ).
+        
+        
+        :param ns: nanoseconds
+        :param us: microseconds
+        :param ms: milliseconds
+        """
+        self.daq_config.op_time = ns + us*1000 + ms*1000*1000
+        return self.daq_config.op_time
+    
+    def set_daq(self, *,
+            num_channels = 0,
+            sample_op = True,
+            sample_op_end = True,
+            sample_rate = 500_000,
+            ):
+        """
+        :param num_channels: Data aquisition specific - number of channels to sample. Between
+           0 (no data aquisition) and 8 (all channels)
+        :param sample_op: Sample a first point exactly when optime starts
+        :param sample_op_end: Sample a last point exactly when optime ends
+        :param sample_rate: Number of samples requested over the overall optime (TODO: check
+           if this descrption is correct)
+        """
+        if not (0 <= num_channels and num_channels < 8):
+            raise ValueError("Require 0 <= num_channels < 8")
+        # TODO: Check also other values for suitable value.
+        # Do it here or at start_run just before query.
+
+        self.daq_config.num_channels = num_channels
+        self.daq_config.sample_op = sample_op
+        self.daq_config.sample_op_end = sample_op_end
+        self.daq_config.sample_rate = sample_rate
+        
+        return self.daq_config
+
+    def set_run(self, *,
+            halt_on_external_trigger = False,
+            halt_on_overload = True,
+            ic_time = None,
+            op_time = None,
+            ):
+        """
+        :param halt_on_external_trigger: Whether halt the run if external input triggers
+        :param halt_on_overload: Whether halt the run if overload occurs during computation
+        :param ic_time: Request time to load initial conditions, in nanoseconds.
+           This time depends on the k0 factors. However, it is rarely neccessary to tune this
+           parameter, once useful values have been used. If not set, a value derived from the
+           (first time in object lifetime) configuration set will be used.
+        :param op_time: Request time for simulation, in nanoseconds. This is the most important
+           option for this method. Note that by a current limitation in the hardware, only
+           op_times < 1sec are supported.
+        """
+        self.run_config.halt_on_external_trigger = halt_on_external_trigger
+        self.run_config.halt_on_overload = halt_on_overload
+        if ic_time:
+            self.run.config.ic_time = ic_time
+        if op_time:
+            self.run.config.op_time = op_time
+        return self.run_config
+
+    def start_run(self) -> Run:
+        """
+        Uses the set_run and set_daq as before.
+        Returns a Run object which allows to read all data.
+        """
+
+        start_run_msg = dict(
+            id = str(uuid.uuid4()),
+            session = None,
+            config = self.run_config,
+            daq_config = self.daq_config
+        )
+        
+        ret = self.query("start_run", start_run)
+        if ret:
+            raise Error("Run did not start successfully")
+    
+        return Run(self)
+    
 
 if __name__ == "__main__":
     # simple example demonstrator
@@ -245,3 +452,6 @@ if __name__ == "__main__":
 #    hc = HybridController("192.168.68.60", 5732)
 #    status = hc.query('status')
 #    print(status)
+asdasd
+
+:param halt_on_external_trigger: Whether halt the run if external input triggers

@@ -276,7 +276,7 @@ class Circuit(Reservoir, MIntBlock, Routing):
     def __init__(self, routes: list[Route] = []):
         super().__init__(routes=routes)
     
-    def int(self, id=None, ic=0, slow=False):
+    def int(self, *, id=None, ic=0, slow=False):
         "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
         el = Reservoir.int(self, id)
         self.set_ic(el, ic)
