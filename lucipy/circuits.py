@@ -17,7 +17,7 @@ ExtIn/ADC/etc. But it makes it very simple and transparent to work with routes
 and setup the circuit configuration low level.
 """
 
-import functools, operator
+import functools, operator, textwrap
 from collections import namedtuple
 from typing import get_args
 
@@ -48,21 +48,28 @@ def next_free(occupied: list[bool], append_to:int=None) -> int|None:
 
 Int = namedtuple("Int", ["id", "out", "a"])
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])
-Ele = Int|Mul
+Const = namedtuple("Const", ["id", "out" ])
+Ele = Int|Mul|Const
+
 
 class DefaultLUCIDAC:
     num_int = 8
     num_mul = 4
+    num_const = 4 # REV0 has constant givers
+    
+    MMulOffset = 0 # M1 block
+    MIntOffset = num_mul + num_const # == 8 # M0 block
 
     @staticmethod
     def reservoir(default_value=False):
         return {
             Int: [default_value]*DefaultLUCIDAC.num_int,
             Mul: [default_value]*DefaultLUCIDAC.num_mul,
+            Const: [default_value]*DefaultLUCIDAC.num_const,
         }
     
-    @staticmethod
-    def make(t:Ele, idx):
+    @classmethod
+    def make(cls, t:Ele, idx):
         """
         A factory for the actual elements.
     
@@ -72,10 +79,20 @@ class DefaultLUCIDAC:
         Mul(id=3, out=3, a=6, b=7)
         """
         if t == Int:
-            return Int(idx,idx,idx)
+            return Int(idx, cls.MIntOffset+idx, cls.MIntOffset+idx)
         if t == Mul:
-            return Mul(idx,idx, 2*idx, 2*idx+1)
-    
+            return Mul(idx, 
+                cls.MMulOffset + idx,
+                cls.MMulOffset + 2*idx,
+                cls.MMulOffset + 2*idx+1)
+        if t == Const:
+            # REV0 constants at MMul block
+            return Const(idx, cls.MMulOffset + idx + cls.num_mul)
+        
+    @staticmethod
+    def populated():
+        "An unsorted list of all allocatable computing elements"
+        return flatten([ [ DefaultLUCIDAC.make(t,i) for i,_ in enumerate(v) ] for t,v in DefaultLUCIDAC.reservoir().items() ])
 
 class Reservoir:
     """
@@ -186,7 +203,15 @@ class MIntBlock:
         return {
             "elements": [dict(k=k, ic=ic) for k,ic in zip(self.k0s, self.ics)]
         }
-
+    
+    def to_pybrid_cli(self):
+        """
+        Generate the Pybrid-CLI commands as string out of this Route representation
+        """
+        ret = []
+        ret += ["set-element-config carrier/0/M0/{i} ic {val}" for i,val in enumerate(self.ics) if val != 0]
+        ret += ["set-element-config carrier/0/M0/{i} k {val}" for i,val in enumerate(self.ics) if k0s != self.fast]
+        return "\n".join(ret)
 
 class Routing:
     """
@@ -263,6 +288,51 @@ class Routing:
         }
         # TODO: Ublock Altsignals, where in REV1?
         # ret["/U"]["alt_signals"] = [False]*8
+    
+    def to_pybrid_cli(self):
+        """
+        Generate the Pybrid-CLI commands as string out of this Route representation
+        """
+        return "\n".join("route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
+    
+    def reverse(self):
+        """
+        Trivially "reverse engineer" a circuit based on routes
+        """
+        
+        # TODO: Code is ugly, refactor to proper Int/Mul types which can do most of this
+        
+        def assert_one(candidates, r):
+            candidates = list(candidates)
+            if len(candidates) == 0:
+                raise ValueError(f"Route {r} not assignable, no candidates")
+            if len(candidates) == 1:
+                return candidates[0]
+            if len(candidates) == 2:
+                raise ValueError(f"Route {r} overassignable, candidates are {src_candidates}")
+        
+        populated = DefaultLUCIDAC.populated()
+        
+        def within(itm, fields, idx):
+            for n in fields:
+                if hasattr(itm, n) and getattr(itm, n) == idx:
+                    return n
+            return None
+
+        def route2connection(r):
+            #print("source ", r)
+            source = assert_one(filter(lambda itm: itm.out == r.uin, populated), r)
+            #print("target ", r)
+            target = assert_one(filter(lambda itm: bool(within(itm, ["a", "b"], r.iout)), populated), r)
+            target_port = assert_one(filter(bool, [ within(itm, ["a", "b"], r.uin) for itm in populated ]), r)
+            has_two_ports = hasattr(target, "b") # i.e. if it is Mul or Not
+            weight = r.coeff
+            source_shortname = type(source).__name__ + str(source.id)
+            target_shortname = type(target).__name__ + str(target.id) + ("."+target_port if has_two_ports else "")
+            return f"Connection(" + source_shortname + ", " + target_shortname + (f", {weight=}" if r.coeff != 1 else "") + ")"
+                         
+        return ",\n".join(map(route2connection, self.routes))
+        
 
 
 class Circuit(Reservoir, MIntBlock, Routing):
@@ -284,10 +354,26 @@ class Circuit(Reservoir, MIntBlock, Routing):
         return el
     
     def generate(self):
-        "Returns the data structure required by the LUCIDAC set_config call"
+        """
+        Returns the data structure required by the LUCIDAC set_config call *for a given carrier*,
+        i.e. usage is like 
+    
+        ::
+    
+            outer_config = {
+                "entity": ["04-E9-E5-16-09-92", "0"],
+                "config": circuit.generate()
+            }
+            hc.query("set_config", outer_config)
+        """
+        cluster_config = Routing.generate(self)
+        cluster_config["/M0"] = MIntBlock.generate(self) 
+        cluster_config["/M1"] = {} # MMulBlock
+        return cluster_config 
+    
         config = {
             "/0": {
-                "/M0": MIntBlock.generate(self),
+                "/M0": MIntBlock.generate(self) ,
                 "/M1": {},
             }
         }
@@ -302,3 +388,14 @@ class Circuit(Reservoir, MIntBlock, Routing):
     
     def write(self, hc):
         hc.set_circuit(self.generate())
+        
+    def to_pybrid_cli(self):
+        return textwrap.dedent(f"""
+        set-alias * carrier
+        
+        {MIntBlock.to_pybrid_cli(self)}
+        
+        {Routing.to_pybrid_cli(self)}
+        
+        # run --op-time 500000
+        """)

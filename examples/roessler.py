@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import sys, uuid
+import sys
 from pprint import pprint
 sys.path.append("..") # use that lucipy in parent directory
 
@@ -162,54 +162,9 @@ def constant():
 
 ode.add(roessler())
 
-pprint(ode.generate())
-
 config = ode.generate()
-config["entity"] = "04-E9-E5-16-09-92"
+pprint(config)
+hc.set_config(config)
 
-#config = sinus_von_pybrid
-sinus_von_pybrid["entity"] = config["entity"]
-
-"""
-outer_config = {
-    "entity": ["04-E9-E5-16-09-92", "0"],
-    "config": sinus_von_pybrid # config
-}
-hc.query("set_config", outer_config)
-"""
-
-# TODO: Move in Lib
-for entity, entity_config in config["config"]["/0"].items():
-    outer_entity_config = {
-        "entity": ["04-E9-E5-16-09-92", "0"],
-        "config": {
-                entity: entity_config
-            }
-        }
-    hc.query("set_config", outer_entity_config)
-
-
-# TODO: Move in Lib
-run_config = dict(
-    halt_on_external_trigger = False,
-    halt_on_overload  = True,
-    ic_time = 50000, # 100_000, # ns
-    op_time = 900_000_000, # 200_000_000, # ns
-)
-
-daq_config = dict(
-    num_channels = 0,
-    sample_op = True,
-    sample_op_end = True,
-    sample_rate = 500_000,
-)
-
-start_run = {
-    "id": str(uuid.uuid4()),
-    "session": None,
-    "config": run_config,
-    "daq_config": daq_config,
-}
-
-print("Start run")
-hc.query("start_run", start_run)
+hc.set_op_time(ms=900)
+hc.start_run()

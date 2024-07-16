@@ -18,8 +18,8 @@ also runs fine without.
 """
 
 # all this is only python standard library  :)
-import logging, time, socket, select, json, types, \
-    itertools, os, functools, collections
+import logging, time, socket, select, json, types, typing, \
+    itertools, os, functools, collections, uuid
 log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
 
@@ -156,7 +156,7 @@ class Run:
     def __init__(self, hc):
         self.hc = hc
     
-    def data(self) -> types.Generator[list[float]]:
+    def data(self) -> typing.Iterator[list[float]]:
         """
         "Slurp" all data aquisition from the run. Basically a "busy wait" or
         "synchronous wait" until the run finishes.
@@ -172,7 +172,7 @@ class Run:
             # should assert for line['old'] == state.
             state = envelope["new"];
             try:
-                if !(self.is_state(state, "DONE") || self.is_sate(state, "ERROR")):
+                if not (self.is_state(state, "DONE") or self.is_sate(state, "ERROR")):
                     return
             except ValueError:
                 print(f"Unknown state in {envelope}")
@@ -238,12 +238,17 @@ class LUCIDAC:
         self.run_config = dotdict(
             halt_on_external_trigger = False,
             halt_on_overload  = True,
-            ic_time = 50000, # ns 
-            op_time = 900_000_000, # # ns
+            ic_time = 123456, # ns 
+            op_time = 234567, # ns
         )
 
         "Storage for stateful preparation of runs."
-        self.daq_config = dotdict()
+        self.daq_config = dotdict(
+            num_channels = 0,
+            sample_op = True,
+            sample_op_end = True,
+            sample_rate = 500_000,
+        )
         
         if register_methods:
             self.register_methods(self.commands, self.memoizable)
@@ -292,7 +297,9 @@ class LUCIDAC:
     
     def get_mac(self):
         "Get system ethernet mac address. Is cached."
-        return self.hc_mac if self.hc_mac else self.get_entities()
+        if not self.hc_mac:
+            self.get_entities()
+        return self.hc_mac
     
     def get_entities(self):
         "Gets entities and determines system Mac address"
@@ -316,9 +323,8 @@ class LUCIDAC:
             if k0 == slow_k0: return False
             else:             return True # is default at firmware side
         
-        # TODO, insert correct values here
-        fast_ic_time =  99_999 # ns
-        slow_ic_time = 999_999 # ns
+        fast_ic_time =    100_000 # 100 us in ns
+        slow_ic_time = 10_000_000 #  10 ms in ns
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
@@ -335,11 +341,12 @@ class LUCIDAC:
             "entity": [self.get_mac(), str(cluster_index)],
             "config": config
         }
+        print(outer_config)
         
         if "/M0" in config and not "ic_time" in self.run_config:
             self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
         
-        return hc.query("set_config", outer_config)
+        return self.query("set_config", outer_config)
     
     def set_circuit(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
@@ -363,8 +370,8 @@ class LUCIDAC:
         :param us: microseconds
         :param ms: milliseconds
         """
-        self.daq_config.op_time = ns + us*1000 + ms*1000*1000
-        return self.daq_config.op_time
+        self.run_config.op_time = ns + us*1000 + ms*1000*1000
+        return self.run_config.op_time
     
     def set_daq(self, *,
             num_channels = 0,
@@ -430,7 +437,7 @@ class LUCIDAC:
             daq_config = self.daq_config
         )
         
-        ret = self.query("start_run", start_run)
+        ret = self.query("start_run", start_run_msg)
         if ret:
             raise Error("Run did not start successfully")
     
@@ -452,6 +459,3 @@ if __name__ == "__main__":
 #    hc = HybridController("192.168.68.60", 5732)
 #    status = hc.query('status')
 #    print(status)
-asdasd
-
-:param halt_on_external_trigger: Whether halt the run if external input triggers
