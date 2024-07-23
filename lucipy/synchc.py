@@ -19,7 +19,7 @@ also runs fine without.
 
 # all this is only python standard library  :)
 import logging, time, socket, select, json, types, typing, \
-    itertools, os, functools, collections, uuid
+    itertools, os, functools, collections, uuid, time
 log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
 
@@ -120,10 +120,12 @@ class jsonlines():
         self.sock.send(json.dumps(sth))
     def read(self, *args, **kwargs):
         read = self.sock.read(*args, **kwargs)
-        if not read:
+        while not read:
             print("haven't read anything, trying again")
+            time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
 
+        print(f"jsonlines.read() got {read}")
         return json.loads(read)
         #except json.JSONDecodeError as s:
     def read_all(self):
@@ -442,6 +444,39 @@ class LUCIDAC:
             raise Error("Run did not start successfully")
     
         return Run(self)
+    
+    def manual_mode(self, to:str):
+        return self.query("manual_mode", dict(to=to))
+    
+    def master_for(self, *minions):
+        """
+        Create a master-minion setup with at least one controlled LUCIDAC (minion).
+        minions: type LUCIDAC
+        """
+        return LUCIGroup(self, *minions)
+
+class LUCIGroup:
+    """
+    Group of LUCIDACs in a master/minion setup.
+    """
+    
+    def __init__(self, master: LUCIDAC, *minions: LUCIDAC):
+        self.master = master
+        self.minions = minions
+        for minion in self.minions:
+            res = minion.manual_mode("minion")
+            if res:
+                raise ValueError(f"Failed to make {minion} a minion, returned {res}")
+    
+    def __getattr__(self, attr):
+        if attr not in self.__dict__:
+            # for the moment, we forward every command only to the master.
+            # Later, we want to collect results, such as from "get_entities".
+            # However, in the moment this does not even work on free floating teensies with
+            # LUCIDAC REV1 hardware, cf. hybrid-controller#145.
+            return getattr(self.master, attr)
+        
+    
     
 
 if __name__ == "__main__":
