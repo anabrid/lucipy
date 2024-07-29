@@ -222,7 +222,7 @@ class Routing:
     routes : list[Route]
     
     def __repr__(self):
-        return f"Routing({routes})"
+        return f"Routing({self.routes})"
     
     def __init__(self, routes: list[Route] = [], **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
