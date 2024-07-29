@@ -146,6 +146,9 @@ class Reservoir:
         "Allocate a Multiplier. If you pass an id, allocate that particular multiplier."
         return self.alloc(Mul, id)
     
+    def const(self, id=None):
+        return self.alloc(Const, id)
+    
     # some more fun
     def ints(self, count):
         "Allocate count many integrators"
@@ -221,20 +224,30 @@ class Routing:
     max_lanes = 32
     #routes : list[Route]
     
+    def available_lanes(self):
+        # for a fully functional lucidac, do this:
+        #return range(32)
+        # Instead, we know these lanes are working only:
+        return [0,1,2,3,4,5, 14,15, 16,17, 18,19, 20,21, 30,31]
+    
     def __repr__(self):
         return f"Routing({self.routes})"
     
-    def __init__(self, routes: list[Route] = [], **kwargs):
+    def __init__(self, routes: list[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
-        self.routes = routes
+        self.routes = routes if routes else []
     
     def next_free_lane(self):
-        occupied_lanes = [ True if x else False for x in (find(lambda r: r.lane == lane, None, self.routes) for lane in range(32))]
+        route_for_lane = [ find(lambda r: r.lane == lane, None, self.routes) for lane in self.available_lanes() ]
+        is_lane_occupied = [ True if x else False for x in route_for_lane ]
+        #print("next_free_lane", self.available_lanes())
+        #print("next_free_lane", is_lane_occupied)
         #occupied_lanes = [ r.lane for r in self.routes ]
-        idx = next_free(occupied_lanes, append_to=self.max_lanes)
+        idx = next_free(is_lane_occupied)#, append_to=self.max_lanes)
+        #print("next_free_lane = ",idx)
         if idx == None:
-            raise ValueError(f"All {self.max_lanes} available lanes occupied, no more connections possible.")
-        return idx
+            raise ValueError(f"All {self.available_lanes()} available lanes occupied, no more connections possible.")
+        return self.available_lanes()[idx]
     
     def add(self, route_or_list_of_routes:Route|list[Route]):
         if isinstance(route_or_list_of_routes, list):

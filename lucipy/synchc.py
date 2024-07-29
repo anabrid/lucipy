@@ -87,7 +87,7 @@ class serialsocket:
     "Uses pyserial to connect to directly attached device"
     def __init__(self, device):
         if not serial:
-            raise Error("PySerial not available, please install with 'pip install pyserial'")
+            raise ImportError("PySerial not available, please install with 'pip install pyserial'")
         self.device = device
         self.fh = serial.Serial(self.device)
         # sometimes there is stuff stuck in the serial port. Read all of it and wipe it.
@@ -441,7 +441,7 @@ class LUCIDAC:
         
         ret = self.query("start_run", start_run_msg)
         if ret:
-            raise Error("Run did not start successfully")
+            raise ValueError(f"Run did not start successfully. Expected answer to 'start_run' but got {ret=}")
     
         return Run(self)
     
