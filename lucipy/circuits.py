@@ -180,8 +180,8 @@ class MIntBlock:
     """
     Stateful configuration about all the MIntBlock.
     """
-    ics : list[float]
-    k0s : list[int]
+    #ics : list[float]
+    #k0s : list[int]
     
     slow =  1_000
     fast = 10_000
@@ -219,7 +219,7 @@ class Routing:
     generates the Output-centric matrix configuration at the end.
     """
     max_lanes = 32
-    routes : list[Route]
+    #routes : list[Route]
     
     def __repr__(self):
         return f"Routing({self.routes})"
