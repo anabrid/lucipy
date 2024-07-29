@@ -25,6 +25,7 @@ logging.basicConfig(level=logging.INFO)
 
 from .detect import detect, Endpoint
 
+nonempty = lambda lst: [x for x in lst if x]
 
 try:
     import serial
@@ -352,8 +353,18 @@ class LUCIDAC:
     
     def set_circuit(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
-        return self.set_config()
+        return self.set_config(circuit)
     
+    def set_by_path(self, path, config):
+        """
+        path is a string like ["/C", "17", "factor"]
+        """
+        cluster_index = 0
+        outer_config = {
+            "entity": [self.get_mac(), str(cluster_index)] + path,
+            "config": config
+        }
+        return self.query("set_config", outer_config)
     
     def set_op_time(self, *, ns=0, us=0, ms=0):
         """

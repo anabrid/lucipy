@@ -17,7 +17,7 @@ ExtIn/ADC/etc. But it makes it very simple and transparent to work with routes
 and setup the circuit configuration low level.
 """
 
-import functools, operator, textwrap
+import functools, operator, textwrap, pprint
 from collections import namedtuple
 from typing import get_args
 
@@ -231,7 +231,7 @@ class Routing:
         return [0,1,2,3,4,5, 14,15, 16,17, 18,19, 20,21, 30,31]
     
     def __repr__(self):
-        return f"Routing({self.routes})"
+        return f"Routing({pprint.pformat(self.routes)})"
     
     def __init__(self, routes: list[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
@@ -263,7 +263,7 @@ class Routing:
         return physical
 
     def connect(self, source:Ele|int, target:Ele|int, weight=1):
-        self.add(Connection(source,target,weight))
+        return self.add(Connection(source,target,weight))
     
     @staticmethod
     def routes2matrix(routes):
