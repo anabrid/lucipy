@@ -2,6 +2,7 @@
 # https://analogparadigm.com/downloads/alpaca_2.pdf
 
 from lucipy import LUCIDAC, Circuit, Route, Connection
+from time import sleep
 
 lucidac_endpoint = "tcp://192.168.150.127"
 
@@ -38,10 +39,24 @@ lorenz.add(Route(y.out, 9, 0, 6))
 print("Circuit routes for Lorenz attractor: ")
 print(lorenz)
 
-hc = LUCIDAC(lucidac_endpoint)
-hc.query("reset")
-hc.set_config(lorenz.generate())
-hc.set_op_time(ms=1000)
-hc.run_config.halt_on_overload = False
+from lucipy.simulator import *
 
-hc.start_run()
+sys = simulation(lorenz)
+
+if False:
+    hc = LUCIDAC(lucidac_endpoint)
+    hc.query("reset")
+    hc.set_config(lorenz.generate())
+
+    manual_control = True
+    if manual_control:
+        hc.query("manual_mode", dict(to="ic"))
+        sleep(1)
+        hc.query("manual_mode", dict(to="op"))
+        sleep(20)
+        hc.query("manual_mode", dict(to="halt"))
+    else:
+        hc.set_op_time(ms=1000)
+        hc.run_config.halt_on_overload = False
+
+        hc.start_run()

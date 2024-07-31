@@ -186,7 +186,7 @@ class MIntBlock:
     #ics : list[float]
     #k0s : list[int]
     
-    slow =  1_000
+    slow =    100
     fast = 10_000
     
     def __init__(self, **kwargs):
@@ -265,13 +265,15 @@ class Routing:
     def connect(self, source:Ele|int, target:Ele|int, weight=1):
         return self.add(Connection(source,target,weight))
     
-    @staticmethod
-    def routes2matrix(routes):
-        "AoS->SoA Reduced Matrix (=input) representation, as in lucidon/mapping.ts"
+    def routes2matrix(self):
+        """
+        AoS->SoA Reduced Matrix (=input) representation, as in lucidon/mapping.ts
+        These are the spare matrix formats used by the protocol.
+        """
         return dict(
-            u=clean([[r.uin  for r in routes if r.lane == lane] for lane in range(32)]),
-            i=clean([r.iout for r in routes if r.lane == lane] for lane in range(32)),
-            c=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, routes) for lane in range(32))]
+            u=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
+            i=clean([r.iout for r in self.routes if r.lane == lane] for lane in range(32)),
+            c=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
     
     @staticmethod
@@ -293,7 +295,7 @@ class Routing:
         Generate the configuration data structure required by the protocol, which is
         that "output-centric configuration".
         """
-        mat = self.routes2matrix(self.routes)
+        mat = self.routes2matrix()
         return {
             "/U": dict(outputs = mat["u"]),
             "/C": dict(elements =  mat["c"]),
@@ -307,6 +309,17 @@ class Routing:
         Generate the Pybrid-CLI commands as string out of this Route representation
         """
         return "\n".join("route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
+    
+    def to_dense_matrix(self):
+        """
+        Generates a dense numpy matrix for the UCI block, i.e. a real-valued 16x16 matrix with
+        bounded values [-20,20] where at most 32 entries are non-zero.
+        """
+        import numpy as np
+        UCI = np.zeros((16,16))
+        for (uin, _lane, coeff, iout) in self.routes:
+            UCI[iout,uin] += coeff
+        return UCI
     
     def reverse(self):
         """

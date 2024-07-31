@@ -321,7 +321,7 @@ class LUCIDAC:
         """
         def isFast(k0):
             fast_k0 = 10_000
-            slow_k0 =  1_000
+            slow_k0 =    100
             if k0 == fast_k0: return True
             if k0 == slow_k0: return False
             else:             return True # is default at firmware side
