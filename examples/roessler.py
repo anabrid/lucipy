@@ -20,7 +20,7 @@ def roessler():
         Route(9,   3,  0.2,   9), # Int1->Int1 Lit: 0.2, hier war: 0.4
         Route(4,   4, -0.005,10),
         Route(8,   5,  1.0,   0),
-        Route(4,  14,  0.38,  0),
+        Route(4,  14, -0.38,  0), # TODO Math/Simulation is correctly -0.38, REV0 requires +0.38 !?
         Route(10, 15, 15.0,   1),
         Route(0,  16, -1.0,  10),
         
@@ -178,12 +178,13 @@ if True:
     ion()
 
     sim = simulation(ode)
-    t_final=0.6
-    ics = [0.5, 0.1, 0]
+    t_final=50
+    #ics = [0.5, 0.1, 0]
+    ics = sim.ics[0:3]
     interest = ["x", "y", "z"]
 
     res_luci = sim.solve_ivp(t_final, ics=ics, dense_output=True)
-    res_py   = solve_ivp(f_roessler, t_span=[0, t_final], y0=ics, dense_output=True)
+    res_py   = solve_ivp(f_roessler, t_span=[0, t_final], y0=ics, method="LSODA", dense_output=True)
     
     data_luci = res_luci.sol(linspace(0,t_final,300))
     data_py =   res_py.sol(linspace(0,t_final,300))
@@ -207,8 +208,8 @@ if True:
         dypy = dydt(f_roessler, res_py)
 
         for i,label in enumerate(interest):
-            p = plot(dyluci[i], label=f"{label} (Python)")
-            plot(dypy[i], "--", label=f"{label} (lucisim)", color=p[0].get_color(), alpha=0.7)
+            p = plot(res_py.t, dypy[i], label=f"{label} (Python)")
+            plot(res_luci.t, dyluci[i], "--", label=f"{label} (lucisim)", color=p[0].get_color(), alpha=0.7)
         legend()
 
 if False:

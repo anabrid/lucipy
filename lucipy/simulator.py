@@ -39,12 +39,19 @@ class simulation:
     the actual system matrix for I^in = f(I^out).
     
     Note that the system state is purely hold in I.
+    
+    Note that k0 is implemented in a way that 1 time unit = 10_000 and
+    k0 slow results are thus divided by 100 in time.
+    Should probably be done in another way so the simulation time is seconds.
     """
     
     def __init__(self, circuit):
         UCI = circuit.to_dense_matrix()
         self.A, self.B, self.C, self.D = split(UCI, 8, 8)
         self.ics = circuit.ics
+        
+        # fast = 10_000, slow = 100
+        self.int_factor = np.array(circuit.k0s) / 10_000
         
     def Mul_out(self, Iout):
         # Determine Min from Iout, the "loop unrolling" way
@@ -58,14 +65,22 @@ class simulation:
         
         Mout = Mout_from(Min0)
         Min = Min0
-
+        
         max_numbers_of_loops = 4 # = number of available multipliers (in system=on MMul)
         for loops in range(max_numbers_of_loops+1):
             Min_old = Min.copy()
             Min = self.A.dot(Mout) + self.B.dot(Iout)
             Mout = Mout_from(Min)
+            #print(f"{loops=} {Min=} {Mout=}")
+
+            # this check is fine since exact equality (not np.close) is required.
+            # Note that NaN != NaN, therefore another check follows
             if np.all(Min_old == Min):
                 break
+            
+            if np.any(np.isnan(Min)) or np.any(np.isnan(Mout)):
+                raise ValueError(f"At {loops=}, occured NaN in {Min=}; {Mout=}")
+
         else:
             raise ValueError("The circuit contains algebraic loops")
         
@@ -77,22 +92,36 @@ class simulation:
         return np.sum(sys != 0, axis=(2,3))
 
     
-    def rhs(self, t, state):
+    def rhs(self, t, state, clip=True):
         Iout = state
+        
+        #eps = 1e-2 * np.random.random()
+        eps = 0.2
+        if clip:
+            Iout[Iout > +1.4] = +1.4 - eps
+            Iout[Iout < -1.4] = -1.4 + eps
+
         Mout = self.Mul_out(Iout)
         Iin = self.C.dot(Mout) + self.D.dot(Iout)
         int_sign  = +1 # in LUCIDAC, integrators do not negate
         #print(f"{Iout[0:2]=} -> {Iin[0:2]=}")
         #print(t)
-        return int_sign * Iin
+        return int_sign * Iin * self.int_factor
     
-    def solve_ivp(self, t_final, ics=None, dense_output=True):
+    def solve_ivp(self, t_final, clip=True, ics=None, **kwargs_for_solve_ivp):
+        """
+        Good-to-know options for solve_ivp:
+    
+        * dense_output=True -> allows for interpolating on res.sol(linspace(...))
+        * method="LSODA" -> good for stiff problems
+    
+        """
         if np.all(ics == None):
             ics = self.ics
         elif len(ics) < len(self.ics):
             ics = list(ics) + [0]*(len(self.ics) - len(ics))
         
-        data = solve_ivp(self.rhs, [0, t_final], ics, dense_output=dense_output)
+        data = solve_ivp(lambda t,state: self.rhs(t,state,clip), [0, t_final], ics, **kwargs_for_solve_ivp)
         
         #assert data.status == 0, "ODE solver failed"
         #assert data.t[-1] == t_final
