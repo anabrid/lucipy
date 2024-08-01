@@ -8,9 +8,9 @@ lucidac_endpoint = "tcp://192.168.150.127"
 
 neuron = Circuit()
 
-i0 = neuron.int(ic=+1, slow=False)
-i1 = neuron.int(ic=-1, slow=False)
-i2 = neuron.int(ic=+1, slow=True)
+i0 = neuron.int(ic=+.5, slow=False)
+i1 = neuron.int(ic=+.1, slow=False)
+i2 = neuron.int(ic=+.0, slow=True)
 m0 = neuron.mul()
 m1 = neuron.mul()
 c  = neuron.const()
@@ -20,12 +20,12 @@ slow = 1
 
 neuron.connect(m1, i0,  weight=-4*slow)
 neuron.connect(m0, i0,  weight=-6*slow)
-neuron.connect(c,  i0,  weight=-1*slow) # Iext, was 1
+neuron.connect(c,  i0,  weight=1 + 0.3)
 neuron.connect(i1, i0,  weight=+7.5*slow)
 neuron.connect(i2, i0,  weight=-1*slow)
 
 neuron.connect(i0, i2,  weight=+0.4*slow)
-neuron.connect(c,  i2,  weight=-0.32*slow)
+neuron.connect(c,  i2,  weight=+0.32*slow)
 neuron.connect(i2, i2,  weight=-0.1*slow)
 
 neuron.connect(i0, m0.a, weight=+1)
@@ -40,8 +40,8 @@ neuron.connect(i1, i1,   weight=-1*slow)
 
 # dummy connections for external readout (ACL_OUT),
 # will change in REV1 hardware 
-neuron.add(Route(i0.out, 8, 0, 6))
-neuron.add(Route(i1.out, 9, 0, 6))
+neuron.add(Route(i1.out, 8, 0, 6))
+neuron.add(Route(i2.out, 9, 0, 6))
 
 print("Circuit routes for Hindmarsh-Rose single Neuron model: ")
 print(neuron)
@@ -71,7 +71,7 @@ def f_scaled(t,s):
     dz = r*(s*(x-xr) - z)
     return [dx, dy, dz]
 
-if False:
+if True:
 
     from lucipy.simulator import *
     from pylab import *
