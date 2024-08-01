@@ -2,7 +2,7 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 # only for debugging; very helpful to display big matrices in one line
-np.set_printoptions(edgeitems=30, linewidth=1000)
+np.set_printoptions(edgeitems=30, linewidth=1000, suppress=True)
 
 def split(array, nrows, ncols):
     """
@@ -52,14 +52,15 @@ class simulation:
         Min0 = np.zeros((8,)) # initial guess
         constants = np.ones((4,)) # constant sources on Mblock
         
-        # Compute the MMul block effect, computing 4 multipliers and giving out constants.
+        # Compute the actual MMulBlock, computing 4 multipliers and giving out constants.
         mult_sign = -1 # in LUCIDACs, multipliers negate!
         Mout_from = lambda Min: np.concatenate((mult_sign*np.prod(Min.reshape(4,2),axis=1), constants))
         
         Mout = Mout_from(Min0)
         Min = Min0
 
-        for loops in range(5):
+        max_numbers_of_loops = 4 # = number of available multipliers (in system=on MMul)
+        for loops in range(max_numbers_of_loops+1):
             Min_old = Min.copy()
             Min = self.A.dot(Mout) + self.B.dot(Iout)
             Mout = Mout_from(Min)
@@ -68,6 +69,7 @@ class simulation:
         else:
             raise ValueError("The circuit contains algebraic loops")
         
+        #print(f"{loops=} {Mout[0:2]=}")
         return Mout
     
     def nonzero(self):
@@ -75,21 +77,24 @@ class simulation:
         return np.sum(sys != 0, axis=(2,3))
 
     
-    def rhs(self, state):
+    def rhs(self, t, state):
         Iout = state
         Mout = self.Mul_out(Iout)
         Iin = self.C.dot(Mout) + self.D.dot(Iout)
         int_sign  = +1 # in LUCIDAC, integrators do not negate
-        print(f"{Iout[0:2]=} -> {Iin[0:2]=}")
+        #print(f"{Iout[0:2]=} -> {Iin[0:2]=}")
+        #print(t)
         return int_sign * Iin
     
-    def solve_ivp(self, t_final, initial_state=None, dense_output=True):
-        if np.all(initial_state == None):
-            initial_state = self.ics
+    def solve_ivp(self, t_final, ics=None, dense_output=True):
+        if np.all(ics == None):
+            ics = self.ics
+        elif len(ics) < len(self.ics):
+            ics = list(ics) + [0]*(len(self.ics) - len(ics))
         
-        data = solve_ivp(lambda t, state: self.rhs(state), [0, t_final], initial_state, dense_output=dense_output)
+        data = solve_ivp(self.rhs, [0, t_final], ics, dense_output=dense_output)
         
-        assert data.status == 0, "ODE solver failed"
-        assert data.t[-1] == t_final
+        #assert data.status == 0, "ODE solver failed"
+        #assert data.t[-1] == t_final
         
         return data

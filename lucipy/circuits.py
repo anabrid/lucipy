@@ -346,6 +346,9 @@ class Routing:
             return None
 
         def route2connection(r):
+            # TODO Warning, the target Mul.a|b is most likely still wrong. Has to be tested,
+            #      see for instance roessler as an errnous example.
+            
             #print("source ", r)
             source = assert_one(filter(lambda itm: itm.out == r.uin, populated), r)
             #print("target ", r)
