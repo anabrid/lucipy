@@ -86,10 +86,24 @@ Relevant URLs
 
 .. toctree::
    :maxdepth: 2
-   :caption: Documentation
+   :caption: Getting started
    
    installation
-   api-doc
+   comparison_lucipy_vs_pybrid
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Circuits
+   
+   compilation
+   lucidac-simulation
+   
+.. toctree::
+   :maxdepth: 2
+   :caption: Hardware
+   
+   endpoint-detection
+   connection-sync
 
 
 

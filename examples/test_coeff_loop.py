@@ -1,6 +1,7 @@
 from pydho800.pydho800 import PYDHO800, OscilloscopeRunMode
 from lucipy import LUCIDAC, Circuit, Route
 import matplotlib.pyplot as plt
+from time import sleep
 
 def test_coeff(ode, coeff):
   x = ode.int(id=0, ic=1)
@@ -59,8 +60,12 @@ for coeff in range(1,32):
     tx_depth = dho.memory_depth_t.M_10M
     dho.set_memory_depth(tx_depth)
 
+    hc.query("manual_mode", dict(to="ic"))
     dho.set_run_mode(OscilloscopeRunMode.RUN)
-    hc.start_run()
+    sleep(0.3)
+    hc.query("manual_mode", dict(to="op"))
+    sleep(0.3)
+    hc.query("manual_mode", dict(to="halt"))
     dho.set_run_mode(OscilloscopeRunMode.STOP)
 
     data = dho.query_waveform((0, 1))

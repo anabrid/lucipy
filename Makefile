@@ -6,4 +6,7 @@ dist:
 	python -m build --sdist
 	twine upload dist/*
 
-.PHONY = dist
+docs:
+	cd docs && make html
+
+.PHONY = dist docs

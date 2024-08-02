@@ -117,7 +117,7 @@ class jsonlines():
     def makeSocket(cls, actual_socket_type, *args, **kwargs):
         return cls(actual_socket_type(*args, **kwargs))
     def send(self, sth):
-        print(f"jsonlines.send({json.dumps(sth)}")
+        #print(f"jsonlines.send({json.dumps(sth)}")
         self.sock.send(json.dumps(sth))
     def read(self, *args, **kwargs):
         read = self.sock.read(*args, **kwargs)
@@ -126,7 +126,7 @@ class jsonlines():
             time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
 
-        print(f"jsonlines.read() got {read}")
+        #print(f"jsonlines.read() got {read}")
         return json.loads(read)
         #except json.JSONDecodeError as s:
     def read_all(self):
@@ -137,6 +137,7 @@ class HybridControllerError(Exception):
     pass
 
 def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
+    "Provides the appropriate socket for a given endpoint"
     endpoint = Endpoint(endpoint_url)
     if endpoint.asDevice(): # serial:/dev/foo
         return serialsocket(endpoint.asDevice())
@@ -187,7 +188,22 @@ class Run:
 
 class LUCIDAC:
     """
-    This kind of class is known as *HybridController* in other codes.
+    This kind of class is known as *HybridController* in other codes. It serves as
+    primary entry point for the lucipy code.
+        
+    The constructor has a variety of variants how to be called:
+        
+    :param endpoint_url: If no endpoint (either as string or Endpoint class instance)
+        is provided, will lookup the environment variable ``LUCIDAC_ENDPOINT``. 
+        
+        If neither an endpoint nor the environment variable is set, autodetection
+        is applied and the first connection is chosen. Note that if no LUCIDAC
+        is attached via USB serial, the zeroconf detection will require a few
+        hundred milliseconds, depending on your network.
+    :param auto_reconnect: Whether reconnect in case of los connection
+    :param register_methods: Register typical message types exposed by the server
+        as methods for this class. This allows to call ``hc.foo(bar)`` instead of
+        ``hc.query("foo", bar)``.
     """
    
     ENDPOINT_ENV_NAME = "LUCIDAC_ENDPOINT"
@@ -213,14 +229,6 @@ class LUCIDAC:
     memoizable = "get_entities sys_ident".split()
     
     def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
-        """
-        If no endpoint is given but the environment variable LUCIDAC_ENDPOINT
-        is set, this value is used.
-    
-        If neither an endpoint nor the environment variable is set, autodetection
-        is applied and the first connection is chosen. Note that if no LUCIDAC
-        is attached via USB serial, the zeroconf detection will require a few
-        hundred milliseconds, depending on your network.        """
         if not endpoint_url:
             if self.ENDPOINT_ENV_NAME in os.environ:
                 endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
@@ -296,6 +304,7 @@ class LUCIDAC:
             return resp
     
     def slurp(self):
+        "Read all remaining stuff in the socket. Useful for broken run cleanup"
         return list(self.sock.read_all())
     
     def get_mac(self):
@@ -344,7 +353,7 @@ class LUCIDAC:
             "entity": [self.get_mac(), str(cluster_index)],
             "config": config
         }
-        print(outer_config)
+        #print(outer_config)
         
         if "/M0" in config and not "ic_time" in self.run_config:
             self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
@@ -457,6 +466,7 @@ class LUCIDAC:
         return Run(self)
     
     def manual_mode(self, to:str):
+        "manual mode control"
         return self.query("manual_mode", dict(to=to))
     
     def master_for(self, *minions):
@@ -468,7 +478,14 @@ class LUCIDAC:
 
 class LUCIGroup:
     """
-    Group of LUCIDACs in a master/minion setup.
+    Group of LUCIDACs in a master/minion setup. Usage is like
+        
+    >>> gru    = LUCIDAC("tcp://foo")
+    >>> kevin  = LUCIDAC("tcp://bar")
+    >>> bob    = LUCIDAC("tcp://baz")
+    >>> group  = LUCIGroup(gru, kevin, bob)
+    >>> group.set_circuit(...)
+    >>> group.start_run() ...
     """
     
     def __init__(self, master: LUCIDAC, *minions: LUCIDAC):

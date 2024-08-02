@@ -4,7 +4,8 @@
 from lucipy import LUCIDAC, Circuit, Route, Connection
 from time import sleep
 
-lucidac_endpoint = "tcp://192.168.150.127"
+#lucidac_endpoint = "tcp://192.168.150.127" # frankfurt
+lucidac_endpoint = "tcp://192.168.102.230" # ulm
 
 neuron = Circuit()
 
@@ -20,7 +21,8 @@ slow = 1
 
 neuron.connect(m1, i0,  weight=-4*slow)
 neuron.connect(m0, i0,  weight=-6*slow)
-neuron.connect(c,  i0,  weight=1 + 0.3)
+neuron.connect(c,  i0,  weight=1)
+neuron.connect(c,  i0,  weight=0.3)
 neuron.connect(i1, i0,  weight=+7.5*slow)
 neuron.connect(i2, i0,  weight=-1*slow)
 
@@ -102,9 +104,10 @@ if True:
         for i,label in enumerate(interest):
             subplot(2,1,1)
             p = plot(data_py[i], label=f"{label} (Python)")
+            legend()
             subplot(2,1,2)
             plot(data_luci[i], label=f"{label} (lucisim)", color=p[0].get_color())
-        legend()
+            legend()
         #ylim(-20,20)
 
         

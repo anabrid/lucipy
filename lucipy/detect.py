@@ -79,14 +79,17 @@ class Endpoint:
     return None
 
   def asURL(self):
+    "returns a ``urllib.urlparse`` result"
     return self.parse()
   
   @staticmethod
   def fromDevice(device_name):
+    "Initialize for a device name"
     return Endpoint(f"serial:/{device_name}")
   
   @staticmethod
   def fromJSONL(addr, port=None):
+    "Initialize for a TCP addr/port address tuple"
     return Endpoint(f"tcp://{addr}" + (f":{port}" if port else ""))
   
   def __repr__(self):  # doesnt work...
@@ -100,6 +103,7 @@ def can_resolve(hostname, target_ip:str=None) -> Optional[str]:
         return None
 
 def can_resolve_to(hostname, expected_ip:str):
+    "Checks whether the host system can resolve a given (zeroconf) DNS name"
     return can_resolve(hostname) == expected_ip
 
 class ZeroconfDetector:
@@ -136,6 +140,7 @@ class ZeroconfDetector:
                     vv(self.results)
 
     async def start(self) -> None:
+        "Starts Zeroconf browser detection. Returns after timeout."
         self.aiozc = aiozc = AsyncZeroconf(ip_version=IPVersion.V4Only)
     
         services = [ "_lucijsonl._tcp.local." ] # not even _http
@@ -153,6 +158,7 @@ class ZeroconfDetector:
         return self.results
         
     async def stop(self) -> None:
+        "Stops Zeroconf browser detection"
         assert self.aiozc is not None
         assert self.aiobrowser is not None
         await self.aiobrowser.async_cancel()
@@ -201,11 +207,11 @@ def detect(single=False, prefer_network=True, zeroconf_timeout=500) -> Endpoint 
     """
     Yields or returns possible endpoints.
 
-    @arg single Return only one found instance or None, if nothing found. If this
+    :param single: Return only one found instance or None, if nothing found. If this
          option is False, this function will return an iterator, i.e. behave as generator.
-    @arg zeroconf_timeout Maximum search time: How long to wait for zeroconf answers,
+    :param zeroconf_timeout: Maximum search time: How long to wait for zeroconf answers,
          in milliseconds. Set to 0 or None for unlimited search.
-    @arg prefer_network Yield network result first. Typically a TCP/IP connection is
+    :param prefer_network: Yield network result first. Typically a TCP/IP connection is
          faster and more reliable then the USBSerial.
     """
     res = []

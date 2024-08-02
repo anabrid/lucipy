@@ -17,32 +17,17 @@ def split(array, nrows, ncols):
 
 class simulation:
     """
-    This adopts the convention with the column order
+    A simulator for the LUCIDAC. Please :ref:`refer to the documentation <lucipy-sim>`
+    for a theoretical and practical introduction.
     
-    M1 Mul
-    M0 Int
+    Important properties and limitations:
     
-    and subsequently
-    
-    (M^in) = [ A B ] (M^out)
-    (I^in) = [ C D ] (I^out)
-    
-    or written out,
-    
-    M^in = A * M^out + B * I^out
-    I^in = C * M^out + D * I^out
-    
-    could also denote A,B,C,D as MM, IM, MI, II in (from)(to) fashion.
-    
-    We need to unroll the M^in = f(I^out, M^out) to
-    M^in = f(I^out) so we can then compute M^out from M^in and provide
-    the actual system matrix for I^in = f(I^out).
-    
-    Note that the system state is purely hold in I.
-    
-    Note that k0 is implemented in a way that 1 time unit = 10_000 and
-    k0 slow results are thus divided by 100 in time.
-    Should probably be done in another way so the simulation time is seconds.
+    * Currently only understands mblocks ``M1 = Mul`` and ``M0 = Int``
+    * Unrolls Mul blocks at evaluation time, which is slow
+    * Note that the system state is purely hold in I.
+    * Note that k0 is implemented in a way that 1 time unit = 10_000 and
+      k0 slow results are thus divided by 100 in time.
+      Should probably be done in another way so the simulation time is seconds.
     """
     
     def __init__(self, circuit):
