@@ -1,7 +1,7 @@
 .. _lucipy-comp:
 
-Lucipy Circuit notation and Compilation
-=======================================
+Circuit notation and Compilation
+================================
 
 
 

@@ -61,12 +61,12 @@ First, let us write out the vectors
 
 .. math::
 
-    \begin{align}
+    \begin{aligned}
     M^{in} &= \left( M^{in}_{0a}, M^{in}_{0b}, M^{in}_{1a}, M^{in}_{1b}, \dots, M^{in}_{3a} \right) \\
     M^{out} &= \left( M^{out}_0, M^{out}_1, M^{out}_2, M^{out}_3, c_0, c_1, c_2, c_3 \right) \\
     I^{in} &= \left( I^{in}_0, \dots, I^{in}_7 \right) \\
     I^{out} &= \left( I^{out}_0, \dots, I^{out}_7 \right)
-    \end{align}
+    \end{aligned}
 
 This is a definition for REV0 where the superfluous Math block outputs are used
 for constant givers :math:`c_i = 1`.
@@ -75,10 +75,10 @@ The algorithm is as following: The set of equations is written out as
 
 .. math::
 
-    \begin{align}
+    \begin{aligned}
     M^{in}_i &= A_{ij} ~ M^{out}_j + B_{ij} ~ I^{out}_{ij} \quad&&\text{(eq I)} \\
     I^{in}_i &= C_{ij} ~ M^{out}_j + D_{ij} ~ I^{out}_{ij} \quad&&\text{(eq II)}
-    \end{align}
+    \end{aligned}
 
 and then compute (eq I) :math:`M^{in} = g(I^{out})` with an initial guess :math:`M^{out}=0` and
 then iteratively reinserting the solution for :math:`M^{out}`. (eq II) boils then down to
@@ -110,13 +110,13 @@ applies)
 
 .. math::
 
-   \begin{align}
+   \begin{aligned}
    I^{in}_i = &\phantom{+} D_{ij} I^{out}_j \\
               &+ E_{ijk} I^{out}_j I^{out}_k \\
               &+ F_{ijkl} I^{...}_j I_k I_l \\
               &+ G_{ijklm} I_j I_k I_l I_m \\
               &+ H_{ijklmn} I_j I_k I_l I_m I_n
-   \end{align}
+   \end{aligned}
 
 Computing E, F, G from A, B, C is definetly possible and would allow for a
 "full closed" (yet spare matrix) description of the LUCIDAC. In such a formulation

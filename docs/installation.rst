@@ -9,10 +9,41 @@ The prefered way is to install *lucipy* with pip:
 
    pip install lucipy
 
-Since there are no dependencies, this is an easy step.
+Since there are no dependencies, this is easy and will always work. If you don't want
+to or cannot use pip, the code can also be used as with
 
-Lucipy does not ship with a command line executable. Instead, you can make use of the
-code straight from python scripts or the python REPL:
+.. code-block:: bash
+
+   $ git clone https://github.com/anabrid/lucipy.git
+   $ cd lucipy
+   $ export PYTHONPATH="${PYTHONPATH}:$PWD" # either this
+   $ python                                 # or just start your python/scripts from here
+
+
+Design principles
+-----------------
+
+Lucipy follows a few radical concepts to make it dead-simple to use the code:
+
+* Most of the code works without third party libraries. For instance, you can connect to
+  a LUCIDAC via TCP/IP, program a circuit, run it and get the data without any other
+  dependency, not even numpy. This makes it dead simple to take the code into use even in
+  heterogen and challenging situations, for instance on an old Mac with an old Python
+  version.
+* Code parts which require dependencies, such as when using the Serial device interface,
+  import their dependency at method/function level. This results in a **late** ``ImportError``
+  failure, as one can expect from a scripting language.
+* Lucipy does **not** ship with a command line executable. Instead, the primary supposed
+  interactive usage is via the Python CLI itself. See :ref:`opposite` for the primary
+  reason why.
+* Lucipy is not designed with performance and excellence in mind. Instead, the driving
+  principle is providing a pythonic API which uses as little advanced features as possible.
+  Again, see :ref:`opposite` for the primary reason why.
+
+Usage
+-----
+
+Here is a typical example how to get started with the code:
 
 ::
     
