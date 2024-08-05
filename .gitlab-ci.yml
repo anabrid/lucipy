@@ -1,0 +1,40 @@
+stages:
+- run
+
+docs:make:
+  stage: run
+  image: svek/pydda
+  script:
+    - cd docs && make dirhtml
+  artifacts:
+    paths:
+      - docs/_build/
+
+docs:deploy:
+  stage: run
+  needs: ["docs:make"]
+  image: svek/pydda
+  script:
+    - chmod 600 "$SSH_PRIVATE_KEY_FILE_STAGING"
+    - echo "ai.svenk.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBE2YTwpWWq4ceRXHbCFHlw5kmRVLQjKbdYeFAAyYUDXFRhCjRknE6DKlGIIciKOqzAMiFGz5/vxb6tKMCKBeFU0=" > ~/userknown.txt
+    - cd doc/_build && echo -e "cd anabrid.dev/docs/pyanalog\nput -R ." | sftp -o "UserKnownHostsFile=~/userknown.txt" -i"$SSH_PRIVATE_KEY_FILE_STAGING" $DEPLOY_STAGING_SSH_HOST
+  environment:
+    name: docs
+    url: https://anabrid.dev/pyanalog
+    
+
+deploy-doc:
+  # TODO: Change to a specialized image
+  image: svenk/latex
+  needs:
+    - job: "docs:make"
+      artifacts: true
+  script:
+    - chmod 600 "$STAGING_HOST_SSH_PRIVATE_KEY" "$STAGING_HOST_SSH_HOST_IDENT"
+    - echo -e "cd anabrid.dev/docs/lucipy\nput -R docs/_build/" | sftp -o "UserKnownHostsFile=$STAGING_HOST_SSH_HOST_IDENT" -i"$STAGING_HOST_SSH_PRIVATE_KEY" $STAGING_HOST_SSH
+
+tests:
+  stage: run
+  image: svek/pydda
+  script:
+    - echo nothing yet #make #test
