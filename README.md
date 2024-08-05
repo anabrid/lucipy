@@ -26,5 +26,6 @@ at https://github.com/anabrid/lucipy) and import the `lucipy` directory.
 ## Documentation
 
 For further information see the code documentation including usage examples
-and API reference at **https://anabrid.github.io/lucipy/**.
+and API reference at https://anabrid.github.io/lucipy
+or at https://anabrid.dev/docs/lucipy.
 

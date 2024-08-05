@@ -29,10 +29,16 @@ instance, the repo also contains an Over-The-Air demo firmware updater.
 
 **Relevant URLs**
 
-* https://github.com/anabrid/lucipy public development
-* https://lab.analogparadigm.com/lucidac/software/simplehc.py internal development
+Public Development and Releases:
+
+* https://github.com/anabrid/lucipy public development repo
 * https://pypi.org/project/lucipy/ python package index listing
-* https://anabrid.github.io/lucipy/ sphinx documentation generation target (github pages)
+* https://anabrid.github.io/lucipy/ sphinx documentation Github Actions generation target (github pages)
+
+Internal Development:
+
+* https://lab.analogparadigm.com/lucidac/software/simplehc.py internal development repo
+* https://anabrid.dev/docs/lucipy/ sphinx documentation Gitlab-CI target self-hosted
 
 
 .. toctree::
