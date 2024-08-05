@@ -73,9 +73,9 @@ class DefaultLUCIDAC:
         """
         A factory for the actual elements.
     
-        >>> Reservoir().make(Int, 1)
-        Int(id=1, out=1, a=1)
-        >>> Reservoir().make(Mul, 3)
+        >>> DefaultLUCIDAC().make(Int, 1)
+        Int(id=1, out=9, a=9)
+        >>> DefaultLUCIDAC().make(Mul, 3)
         Mul(id=3, out=3, a=6, b=7)
         """
         if t == Int:
@@ -117,11 +117,11 @@ class Reservoir:
         
         >>> r = Reservoir()
         >>> r.alloc(Int,1)
-        Int(id=1, out=1, a=1)
+        Int(id=1, out=9, a=9)
         >>> r.alloc(Int)
-        Int(id=0, out=0, a=0)
+        Int(id=0, out=8, a=8)
         >>> r.alloc(Int)
-        Int(id=2, out=2, a=2)
+        Int(id=2, out=10, a=10)
         """
         try:
             lst = self.allocated[t]
@@ -169,7 +169,7 @@ def Connection(source:Ele|int, target:Ele|int, weight=1):
     >>> r = Reservoir()
     >>> I1, M1 = r.int(), r.mul()
     >>> Connection(M1.a, I1)
-    Route(uin=0, lane=None, coeff=1, iout=0)
+    Route(uin=0, lane=None, coeff=1, iout=8)
 
     """
     if isinstance(source, get_args(Ele)):

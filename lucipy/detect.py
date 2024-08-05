@@ -53,7 +53,7 @@ class Endpoint:
   >>> Endpoint.fromDevice("/dev/ttyACM0")
   Endpoint("serial://dev/ttyACM0")
   >>> Endpoint.fromJSONL("localhost", 1234).parse().hostname
-  "localhost"
+  'localhost'
   """
   endpoint: str # just the whole string
   default_tcp_port = 5732

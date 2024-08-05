@@ -480,12 +480,12 @@ class LUCIGroup:
     """
     Group of LUCIDACs in a master/minion setup. Usage is like
         
-    >>> gru    = LUCIDAC("tcp://foo")
-    >>> kevin  = LUCIDAC("tcp://bar")
-    >>> bob    = LUCIDAC("tcp://baz")
-    >>> group  = LUCIGroup(gru, kevin, bob)
-    >>> group.set_circuit(...)
-    >>> group.start_run() ...
+    >>> gru    = LUCIDAC("tcp://foo")       # doctest: +SKIP
+    >>> kevin  = LUCIDAC("tcp://bar")       # doctest: +SKIP
+    >>> bob    = LUCIDAC("tcp://baz")       # doctest: +SKIP
+    >>> group  = LUCIGroup(gru, kevin, bob) # doctest: +SKIP
+    >>> group.set_circuit(...)              # doctest: +SKIP
+    >>> group.start_run() ...               # doctest: +SKIP
     """
     
     def __init__(self, master: LUCIDAC, *minions: LUCIDAC):
