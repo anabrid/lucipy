@@ -17,7 +17,7 @@ ExtIn/ADC/etc. But it makes it very simple and transparent to work with routes
 and setup the circuit configuration low level.
 """
 
-import functools, operator, textwrap, pprint
+import functools, operator, textwrap, pprint, itertools
 from collections import namedtuple
 from typing import get_args
 
@@ -25,6 +25,18 @@ from typing import get_args
 flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
 find = lambda crit, default, lst: next((x for x in lst if crit(x)), default)
 clean = lambda itm: [ k[0] if len(k)==1 else (None if len(k)==0 else k) for k in itm ]
+
+def window(seq, n=2):
+    "Returns a sliding window (of width n) over data from the iterable"
+    "   s -> (s0,s1,...s[n-1]), (s1,s2,...,sn), ...                   "
+    it = iter(seq)
+    result = tuple(itertools.islice(it, n))
+    if len(result) == n:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+
 
 def next_free(occupied: list[bool], append_to:int=None) -> int|None:
     """
@@ -93,6 +105,18 @@ class DefaultLUCIDAC:
     def populated():
         "An unsorted list of all allocatable computing elements"
         return flatten([ [ DefaultLUCIDAC.make(t,i) for i,_ in enumerate(v) ] for t,v in DefaultLUCIDAC.reservoir().items() ])
+    
+    
+    @classmethod
+    def resolve_mout(cls, idx, reservoir):
+        """
+        Simplistic way to map mul block outputs to a reservoir
+        """
+        if idx < 0:  raise ValueError(f"0 < {idx=} < 16 too small")
+        if idx < 4:  return reservoir[Mul][idx]
+        if idx < 8:  return reservoir[Const][idx - cls.num_mul]
+        if idx < 16: return reservoir[Int][idx - cls.MIntOffset]
+        else:        raise ValueError(f"0 < {idx=} < 16 too large")
 
 class Reservoir:
     """
@@ -320,6 +344,39 @@ class Routing:
         for (uin, _lane, coeff, iout) in self.routes:
             UCI[iout,uin] += coeff
         return UCI
+    
+    def to_sympy(self):
+        """
+        Creates an ODE system in sympy based on the circuit.
+        """
+        
+        from sympy import symbols, Function, Derivative, Eq
+        
+        t = symbols("t")
+        ints = [Function(f"i_{d}")(t) for d in range(8)]
+        muls = [Function(f"m_{d}")(t) for d in range(4)]
+        sympy_reservoir = { Int: ints, Mul: muls, Const: [1.0]*4 }
+        di = [ Derivative(i, t) for i in ints ]
+        
+        sympy_uin = [ DefaultLUCIDAC.resolve_mout(route.uin, sympy_reservoir) for route in self.routes ]
+        #summands = [ coeff * DefaultLUCIDAC.resolve_mout(uin, sympy_reservoir) for (uin, _lane, coeff, iout) in self.routes ]
+        min_sums = [ sum(route.coeff*uin_symbol for uin_symbol, route in zip(sympy_uin, self.routes) if route.iout == min) for min in range(16) ]
+        
+        min_inputs = itertools.batched(range(0,8), 2) # [(0, 1), (2, 3), (4, 5), (6, 7)]
+        
+        eqs = []
+        
+        for mi, input_indices in zip(muls, min_inputs):
+            prod = -(min_sums[input_indices[0]] * min_sums[input_indices[1]])
+            if prod != 0:
+                eqs.append( Eq(mi, prod) )
+
+        for idx in range(0,8):
+            summands = min_sums[idx+DefaultLUCIDAC.MIntOffset]
+            if summands != 0:
+                eqs.append( Eq(di[idx], summands) )
+        
+        return eqs
     
     def reverse(self):
         """
