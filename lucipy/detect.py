@@ -70,7 +70,7 @@ class Endpoint:
     "This is likely to fail for serial:/ things"
     return urllib.parse.urlparse(self.endpoint)
 
-  def asDevice(self) -> str|None:
+  def asDevice(self) -> Optional[str]:
     "Returns device name if device, else None"
     posix = re.match("serial:/?(/.+)", self.endpoint)
     win = re.match("serial:/?/(.+)", self.endpoint)
