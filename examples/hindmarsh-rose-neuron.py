@@ -4,8 +4,8 @@
 from lucipy import LUCIDAC, Circuit, Route, Connection
 from time import sleep
 
-#lucidac_endpoint = "tcp://192.168.150.127" # frankfurt
-lucidac_endpoint = "tcp://192.168.102.230" # ulm
+lucidac_endpoint = "tcp://192.168.150.127" # frankfurt
+#lucidac_endpoint = "tcp://192.168.102.230" # ulm
 
 neuron = Circuit()
 
@@ -59,7 +59,7 @@ def f_neuron(t, s):
     return [dx, dy, dz]
 
 def f_scaled(t,s):
-    x, y, z = s
+    x_minus, y, z_minus = s
     a = 4
     b = 6
     c = 0.066
@@ -67,11 +67,11 @@ def f_scaled(t,s):
     r = 1e-3
     s = 4
     xr = 0.8
-    Iext = 1.
-    dx = -a*x**3 + b*x**2 + y - z + Iext
-    dy = -d*x**2 + c - y
-    dz = r*(s*(x-xr) - z)
-    return [dx, dy, dz]
+    Iext = 0.9
+    dx_minus = -(+a*x**3 + b*x**2 + 7.5*y + z + Iext)
+    dy = -(+d*x**2 + c + y)
+    dz_minus = -(r*s*x + r*s*xr - r*z)
+    return [dx_minus, dy, dz_minus]
 
 if True:
 
@@ -80,8 +80,9 @@ if True:
     ion()
 
     sim = simulation(neuron)
-    t_final=2000
+    t_final=1000
     ics = [0.5, 0.1, 0]
+    #ics = [1, -1, +1]
     #ics = sim.ics[0:3]
     #ics = [2,2,2]
     #ics = [1, 0.2, 0] # max_step=0.01, spikes for around t=500
@@ -90,10 +91,12 @@ if True:
 
     res_luci = sim.solve_ivp(t_final, clip=False, ics=ics, dense_output=False)
     res_py   = solve_ivp(f_neuron, t_span=[0, t_final], y0=ics, dense_output=False)
+    #res_scpy = solve_ivp(f_scaled, t_span=[0, t_final], y0=ics, dense_output=False)
     
     data_luci = res_luci.y #res_luci.sol(linspace(0,t_final,300))
     data_py =   res_py.y # res_py.sol(linspace(0,t_final,300))
     #data_py = res_py.y
+    #data_scpy = res_scpy.y
     
     if False:
         data = data_luci
@@ -106,6 +109,7 @@ if True:
             p = plot(data_py[i], label=f"{label} (Python)")
             legend()
             subplot(2,1,2)
+            #p = plot(data_scpy[i], label=f"{label} (Scaled Python)")
             plot(data_luci[i], label=f"{label} (lucisim)", color=p[0].get_color())
             legend()
         #ylim(-20,20)
@@ -143,9 +147,12 @@ else:
     else:
         # manual control because IC/OP times are not working
 
+        print("IC")
         hc.query("manual_mode", dict(to="ic"))
         sleep(1)
+        print("OP")
         hc.query("manual_mode", dict(to="op"))
         sleep(3)
+        print("HALT")
         hc.query("manual_mode", dict(to="halt"))
 

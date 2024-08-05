@@ -34,6 +34,8 @@ routes = [
     # keep in mind lane 8 is defective
     Route(x.out,  8,   0,  0),
     Route(y.out,  9,   0,  0),
+    
+    # DAQ channels are 0 and 1
 ]
 
 ode.add(routes)
@@ -59,16 +61,20 @@ hc = LUCIDAC(lucidac_endpoint)
 hc.query("reset")
 hc.set_config(ode.generate())
 
-manual_control = True
+manual_control = False
 if manual_control:
+    print("IC")
     hc.query("manual_mode", dict(to="ic"))
     sleep(1)
+    print("OP")
     hc.query("manual_mode", dict(to="op"))
     sleep(20)
+    print("HALT")
     hc.query("manual_mode", dict(to="halt"))
 else:
     hc.set_op_time(ms=1000)
+    hc.set_daq(num_channels=2)
     hc.run_config.halt_on_overload = False
 
-    hc.start_run()
+    run = hc.start_run()
 
