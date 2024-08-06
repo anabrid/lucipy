@@ -66,11 +66,11 @@ class tcpsocket:
     def send(self, sth):
         "Expects sth to be a string"
         try:
-            print(f"tcpsocket.send({sth=})")
+            #print(f"tcpsocket.send({sth=})")
             #self.s.sendall(sth.encode("ascii"))
             self.fh.write(sth + "\n")
             self.fh.flush()
-            print("tcpsocket.send() completed")
+            #print("tcpsocket.send() completed")
         except (BrokenPipeError, ConnectionResetError) as e:
             print(f"tcpsocket.send: {e}")
             if self.auto_reconnect:
@@ -81,7 +81,7 @@ class tcpsocket:
     def read(self, *args, **kwargs):
         "Returns a complete line as string. See instead also: self.s.recv(123)"
         try:
-            print("tcpsocket.readline()")
+            #print("tcpsocket.readline()")
             #import ipdb; ipdb.set_trace()
             return self.fh.readline()
         except ConnectionResetError:
@@ -111,15 +111,15 @@ class serialsocket:
     def close(self):
         self.fh.close()
     def send(self, sth):
-        printf(f"serialsocket.send({sth})")
+        #print(f"serialsocket.send({sth})")
         self.fh.write(sth.encode("ascii") + b"\n")
         self.fh.flush()
-        printf(f"serialsocket.send completed")
+        #print(f"serialsocket.send completed")
     def read(self):
         # block until have read exactly one line
         while self.has_data():
             ret = self.fh.readline()
-            print(f"serialsocket.read(): {ret}")
+            #print(f"serialsocket.read(): {ret}")
             return ret
     def has_data(self):
         return has_data(self.fh)
@@ -134,18 +134,18 @@ class jsonlines():
     def makeSocket(cls, actual_socket_type, *args, **kwargs):
         return cls(actual_socket_type(*args, **kwargs))
     def send(self, sth):
-        print(f"jsonlines.send({json.dumps(sth)}")
+        #print(f"jsonlines.send({json.dumps(sth)}")
         self.sock.send(json.dumps(sth))
-        print(f"jsonlines.send completed")
+        #print(f"jsonlines.send completed")
     def read(self, *args, **kwargs):
-        print("jsonlines.read()")
+        #print("jsonlines.read()")
         read = self.sock.read(*args, **kwargs)
         while not read:
             print("haven't read anything, trying again")
             time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
 
-        print(f"jsonlines.read() got {read}")
+        #print(f"jsonlines.read() got {read}")
         return json.loads(read)
         #except json.JSONDecodeError as s:
     def read_all(self):
@@ -344,7 +344,7 @@ class LUCIDAC:
     @staticmethod
     def determine_idal_ic_time_from_k0s(mIntConfig):
         """
-        Given a MIntBlock configuration, which looks like [{k:1000,ic:...},{k:10000,ic:...}...],
+        Given a MIntBlock configuration, which looks like ``[{k:1000,ic:...},{k:10000,ic:...}...]``,
         determines the ideal ic time, in nanoseconds
         """
         def isFast(k0):
@@ -361,11 +361,13 @@ class LUCIDAC:
     
     def set_config(self, config):
         """
-        config being something like dict("/U": ..., "/C": ...), i.e. the entities
+        config being something like ``dict("/U": ..., "/C": ...)``, i.e. the entities
         for a single cluster. There is only one cluster in LUCIDAC.
         
-        Note: This also determines the ideal IC time *if* that has not been set
-              before (either manually or in a previous run).
+        .. warning::
+        
+           This also determines the ideal IC time *if* that has not been set
+           before (either manually or in a previous run).
         """
         cluster_index = 0
         outer_config = {
@@ -385,7 +387,7 @@ class LUCIDAC:
     
     def set_by_path(self, path, config):
         """
-        path is a string like ["/C", "17", "factor"]
+        path is a string like ``["/C", "17", "factor"]``
         """
         cluster_index = 0
         outer_config = {
@@ -396,15 +398,15 @@ class LUCIDAC:
     
     def set_op_time(self, *, ns=0, us=0, ms=0):
         """
-        Sets OP-Time with clear units. Returns computed value, which is just the sum of
-        all arguments set.
+        Sets OP-Time with clear units. Returns computed value, which is just the **sum of
+        all arguments**.
         
-        Consider the limitations reported in :ref:start_run.
+        Consider the limitations reported in :meth:`start_run`.
         
         Note that this function signature is somewhat comparable to python builtin
-        `datetime.timedelta <https://docs.python.org/3/library/datetime.html#timedelta-objects>`,
-        however Python's timedelta has only microseconds resolution which is not enough
-        for the LUCIDAC timing (at least this is what some people say ;) ).
+        `datetime.timedelta <https://docs.python.org/3/library/datetime.html#timedelta-objects>`_,
+        however Python's timedelta has only microseconds resolution which is not as
+        highly-resolved as in LUCIDAC.
         
         
         :param ns: nanoseconds

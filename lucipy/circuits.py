@@ -359,7 +359,7 @@ class Routing:
         :arg no_func_t: Write f instead of f(t) on the RHS, allowing for denser notations,
            helps also in some solver contexts.
         
-        .. warn::
+        .. warning ::
         
            This method is part of the Routing class and therefore knows nothing about
            the MIntBlock settings, in particular not the k0. You have to apply different

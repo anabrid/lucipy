@@ -46,21 +46,22 @@ Internal Development:
    :caption: Getting started
    
    installation
-   comparison_lucipy_vs_pybrid
+   pybrid
 
 .. toctree::
    :maxdepth: 2
    :caption: Circuits
    
    compilation
-   lucidac-simulation
+   simulation
+   emulation
    
 .. toctree::
    :maxdepth: 2
    :caption: Hardware
    
-   endpoint-detection
-   connection-sync
+   zeroconf
+   synchc
 
 
 

@@ -1,12 +1,25 @@
-.. _lucipy-sim:
+.. _sim:
 
-Lucipy Hardware simulation
-==========================
+Circuit simulation
+==================
 
-Idealized math
+Lucipy ships two approaches to simulate a circuit configuration which both
+solve circuit as a first order differential equation system using idealized
+math elements.
 
-loop unrolling
-different approaches
+* The method :py:meth:`.Routing.to_sympy` provides an export to a system of
+  equations written symbolically, translating the analog circuit to its idealized
+  math counterpart. This system can then be solved analytically
+  or numerically.
+* The class :py:class:`.Simulation` does something similar but without making use of
+  Sympy, instead directly working on the UCI matrix. It computes the right hand side
+  function by *loop unrolling* the LUCIDAC multipliers.
+
+Both approaches are currently limited to the LUCIDAC standard configuration
+of Math block elements. This section concentrates on the approach provided
+by :py:class:`.Simulation`. Furher approaches are discussed in the section
+:ref:`sim-variants`.
+
 
 Guiding principle of this simulator
 -----------------------------------
@@ -85,6 +98,8 @@ then iteratively reinserting the solution for :math:`M^{out}`. (eq II) boils the
 :math:`I^{in} = f(I^{out})` and thus solving the RHS from the beginning.
 
 
+.. _sim-variants:
+
 Alternative simulation approaches
 ---------------------------------
 
@@ -136,10 +151,19 @@ has little advantage. For sure in the numpy model, setting up large spare matric
 a "hot" computation might probably save time. However, the systems for LUCIDAC are nevertheless
 so small that no digital computer will have a hard time simulating even in vanilla python.
 
+Including imperfection
+......................
+
+A first option to model the non-idealities of analog computing hardware is to introduce
+*transfer functions* which model what computing elements are doing. We have a Matlab/Simulink 
+simulator available which uses this kind of modeling. More realistic models are available with
+*Spice* but require to describe both the reconfigurable hardware as well as its configuration
+within Spice. However, we provide software to generate these files soon.
 
 
 API Reference
 -------------
 
-.. automodule:: lucipy.simulator
+.. autoclass:: lucipy.simulator.Simulation
    :members:
+   :undoc-members:

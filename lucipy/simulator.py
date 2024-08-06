@@ -1,4 +1,7 @@
-import sys, socket, select, threading, socketserver, json, functools, operator # python internals
+
+# python internals
+import sys, socket, select, threading, socketserver, json, functools, \
+  operator, functools, time, datetime
 
 # only for debugging; very helpful to display big matrices in one line
 
@@ -17,7 +20,7 @@ def split(array, nrows, ncols):
 
 class Simulation:
     """
-    A simulator for the LUCIDAC. Please :ref:`refer to the documentation <lucipy-sim>`
+    A simulator for the LUCIDAC. Please :ref:`refer to the documentation <sim>`
     for a theoretical and practical introduction.
     
     Important properties and limitations:
@@ -138,43 +141,68 @@ class Simulation:
 def find(element, structure):
     return functools.reduce(operator.getitem, element, structure)
 
+def expose(f):
+    f.exposed = True
+    return f
+
 class Emulation:
     """
     A super simple LUCIDAC emulator. This class allows to start up a TCP/IP server
     which speaks part of the JSONL protocol and emulates the same way a LUCIDAC teensy
-    would behave.
+    would behave. It thus is a shim layer ontop of the Simulation class which gets a
+    configuration in and returns numpy data out. The Emulation instead will make sure it
+    behaves as close as possible to a real LUCIDAC over TCP/IP.
+        
+    In good RPC fashion, methods are exposed via a tiny registry and marked ``@expose``.
+    
+    The emulation is very superficial. The focus is on getting the configuration in and
+    some run data which allows for easy developing new clients, debugging, etc. without
+    a real LUCIDAC involved.
+        
+    Please :ref:`refer to the documentation <emu>` for a high level introduction.
     
     .. note::
         Since the overall code does not use asyncio as a philosophy, also this code is
         written as a very traditional forking server. In our low-volume practice, there
         should be no noticable performance penalty.
-        
-        Note that the forking nature of the server also implements a single state per client!
+
     """
     
-    # "python" as Mac address "70-79-74-68-6f-6e" just for fun
     default_emulated_mac = "-".join("%x"%ord(c) for c in "python")
+    "The string 'python' encoded as Mac address 70-79-74-68-6f-6e just for fun"
 
+    @expose
     def get_entities(self):
         "Just returns the standard LUCIDAC REV0 entities with the custom MAC address."
-        return {
-         self.mac: {'/0': {'/M0': {'class': 2,
-            'type': 0,
+        return {'entities': {
+            self.mac: {'/0': {'/M0': {'class': 2,
+                'type': 0,
+                'variant': 0,
+                'version': 0},
+            '/M1': {'class': 2, 'type': 1, 'variant': 0, 'version': 0},
+            '/U': {'class': 3, 'type': 0, 'variant': 0, 'version': 0},
+            '/C': {'class': 4, 'type': 0, 'variant': 0, 'version': 0},
+            '/I': {'class': 5, 'type': 0, 'variant': 0, 'version': 0},
+            'class': 1,
+            'type': 3,
             'variant': 0,
             'version': 0},
-        '/M1': {'class': 2, 'type': 1, 'variant': 0, 'version': 0},
-        '/U': {'class': 3, 'type': 0, 'variant': 0, 'version': 0},
-        '/C': {'class': 4, 'type': 0, 'variant': 0, 'version': 0},
-        '/I': {'class': 5, 'type': 0, 'variant': 0, 'version': 0},
-        'class': 1,
-        'type': 3,
-        'variant': 0,
-        'version': 0},
-        'class': 0,
-        'type': 0,
-        'variant': 0,
-        'version': 0}}
+            'class': 0,
+            'type': 0,
+            'variant': 0,
+            'version': 0}}
+        }
 
+    def micros(self):
+        "Returns microseconds since initialization, mimics microcontroller uptime"
+        uptime_sec = self.started - time.time()
+        return int(uptime_sec / 1e6)
+
+    @expose
+    def ping(self):
+        return { "now": datetime.now().isoformat(), "micros": self.micros() }
+        
+    @expose
     def reset(self):
         "Resets the circuit configuration"
         self.circuit = {'entity': None,
@@ -188,14 +216,17 @@ class Emulation:
             }
         }
     
+    @expose
     def get_config(self):
         "Read out circuit configuration"
         return self.circuit
     
+    @expose
     def get_circuit(self):
         "Read out circuit configuration"
         return self.circuit
-            
+    
+    @expose
     def set_config(self, config):
         "Set circuit configuration"
         # well, now we should have to parse that config message,
@@ -211,17 +242,93 @@ class Emulation:
         child_key = entity[-1]
         
         # TODO, test this
+    
+    #@expose("out-of-band")
+    @expose
+    def start_run(self, start_run_msg):
+        """
+        Emulate an actual run with the LUCIDAC Run queue and FlexIO data aquisition.
         
-    def start_run(self, run_config, daq_config):
-        # TODO: Emulate these state change messages
-        t_final = run_config["op_time"]
+        This function does it all in one rush "in sync" , no need for a dedicated queue.
+        
+        Should react on a message such as the following:
+        
+        ::
+        
+            example_start_run_message = {
+            'id': '417ebb51-40b4-4afe-81ce-277bb9d162eb',
+            'session': None,
+            'config': {
+                'halt_on_external_trigger': False, # will ignore
+                'halt_on_overload': True,          # 
+                'ic_time': 123456,                 # will ignore
+                'op_time': 234567                  # most important, determines simulation time
+            },
+            'daq_config': {
+                'num_channels': 0,                 # should obey
+                'sample_op': True,                 # will ignore
+                'sample_op_end': True,             # will ignore
+                'sample_rate': 500000              # will ignore
+            }}
+        
+        Considering the DAQ, it will just return the nodal integration points for the
+        time being. One *could* easily interpolate at the actual times, thought!
+        
+        """
+
+        run_id = start_run_msg["id"]
+        t_final = start_run_msg["config"]["op_time"]
+        
+        reply_envelopes = []
+        reply_envelopes.append({
+            "type": "run_state_change", "msg": { "id": run_id, "t": self.micros(), "old": "NEW", "new": "DONE" }
+        })
+        
         sim = simulation(self.circuit, realtime=True)
         data = sim.solve_ivp(t_final)
+        
         # TODO need to directly write out these data messages, probably
-        #      resample the data poins        
+        #      resample the data poins
+        
     
-    def handle_request(self, line):
-        "Handles incoming JSONL encoded envelope and respons with a string encoded JSONL envelope"
+    @expose
+    def help(self):
+        return {
+            "human_readable_info": "This is the lucipy emulator",
+            "available_types": list(self.exposed_methods().keys())
+        }
+    
+    def exposed_methods(self):
+        "Returns a dictionary of exposed methods with string key names and callables as values"
+        all_methods = (a for a in dir(self) if callable(getattr(self, a)) and not a.startswith('__'))
+        exposed_methods = { a: getattr(self, a) for a in all_methods if hasattr(getattr(self, a), 'exposed') }
+        return exposed_methods
+    
+    
+    def handle_request(self, line, writer=None):
+        """
+        Handles incoming JSONL encoded envelope and respons with a string encoded JSONL envelope
+    
+        :param line: String encoded JSONL input envelope
+        :param writer: Callback accepting a single binary string argument. If provided, is used
+            for firing out-of-band messages during the reply from a handler. Given the linear
+            program flow, it shall be guaranteed that the callback is not called after return.
+        :returns: String encoded JSONL envelope output
+        """
+        
+        # decided halfway to do it in another way
+        #json_writer = (lambda envelope: writer((json.dumps(envelope)+"\n").encode("utf-8"))) if writer else None
+        
+        def decorate_protocol_reply(ret):
+            if isinstance(ret["msg"], dict) and "error" in ret["msg"]:
+                ret["error"] = ret["msg"]["error"]
+                ret["msg"] = {}
+                ret["status"] = -2
+            else:
+                ret["status"] = 0
+            
+            return json.dumps(ret) + "\n"
+        
         try:
             if not line or line.isspace():
                 return "\n"
@@ -233,15 +340,25 @@ class Emulation:
             if "type" in envelope:
                 ret["type"] = envelope["type"]
             
-            if hasattr(self, envelope["type"]):
-                method = getattr(self, envelope["type"])
-                # This should be wrapped with a generic exception catcher passing any kind of errors
-                # to the caller
+            methods = self.exposed_methods()
+            if envelope["type"] in methods:
+                method = methods[ envelope["type"] ]
                 try:
-                    if "msg" in envelope and isinstance(envelope["msg"], dict):
-                        ret["msg"] = method(**envelope["msg"])
+                    msg_in = envelope["msg"] if "msg" in envelope and isinstance(envelope["msg"], dict) else {}
+
+                    #if method.exposed == "out-of-band":
+                        #ret["msg"] = method(**msg_in, writer=json_writer)
+                    #else:
+                    
+                    # The outcome is EITHER just a single msg_out
+                    # OR it is a list of whole RecvEnvelopes
+                
+                    outcome = method(**msg_in)
+                    
+                    if isinstance(outcome, list):
+                        return list(map(decorate_protocol_reply, outcome))
                     else:
-                        ret["msg"] = method()
+                        ret["msg"] = outcome
                 except Exception as e:
                     print(f"Exception at handling {envelope=}: ", e)
                     ret["msg"] = {"error": f"During handling this message, an exception occured: {e}" }
@@ -250,57 +367,70 @@ class Emulation:
         except json.JSONDecodeError as e:
             ret = { "msg": { "error": f"Cannot read message '{line}', error: {e}" } }
             
-        if isinstance(ret["msg"], dict) and "error" in ret["msg"]:
-            ret["error"] = ret["msg"]
-            ret["status"] = -2
-        else:
-            ret["status"] = 0
-        
-        return json.dumps(ret) + "\n"
+        return decorate_protocol_reply(ret)
     
     def __init__(self, bind_ip="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
+        """
+        :arg bind_ip: Adress to bind to, can also be a hostname. Use "0.0.0.0" to listen on all interfaces.
+        """
         self.mac = emulated_mac
         self.reset()
+        self.started = time.time()
         parent = self
         
         class TCPRequestHandler(socketserver.StreamRequestHandler):
-            #def setup(self):
-             #   print(f"{self.client_address} connected")
-                #print(f"{self.rfile=}, {self.wfile=}")
-                #self.fh = self.request.makefile(mode="rw", encoding="utf-8")
             def handle(self):
-                
-                from .synchc import has_data
-                
+                print(f"New Connection from {self.client_address}")
+                #from .synchc import has_data
                 #self.request.settimeout(2) # 2 seconds
-                
-                #try:
-                    #self.wfile.write(b'{"type":"hans","this is to say hello":"yo"}\n')
-                if 1:
-                    print(f"Waiting for {self.client_address}")
-                    print(f"{has_data(self.rfile)=} {has_data(self.wfile)=}")
-                    line = self.rfile.readline().decode("utf-8")
-                    print(f"Got {line=}")
-                    response = parent.handle_request(line)
-                    print(f"Writing out {response=}")
-                    #self.request.sendall(response.encode("ascii"))
-                    self.wfile.write(response.encode("utf-8"))
-                    self.wfile.flush()
-                #except (BrokenPipeError, KeyboardInterrupt) as e:
-                #    print(e)
-                #    return
-            #def finish(self):
-            #    print(f"{self.client_address} disconnected")
-                
-        #class TCPServer(socketserver.ForkingMixIn, socketserver.TCPServer):
-        class TCPServer(socketserver.TCPServer):
-            pass
+                while True:
+                    try:
+                        #print(f"{has_data(self.rfile)=} {has_data(self.wfile)=}")
+                        line = self.rfile.readline().decode("utf-8")
+                        #print(f"Got {line=}")
+                        response = parent.handle_request(line, writer=self.wfile.write)
+                        #print(f"Writing out {response=}")
+                        #self.request.sendall(response.encode("ascii"))
+                        
+                        # allow multiple responses
+                        responses = [response] if not isinstance(response, list) else response
+                        
+                        for res in responses:
+                            self.wfile.write(res.encode("utf-8"))
+                            
+                        self.wfile.flush()
+                    except (BrokenPipeError, KeyboardInterrupt) as e:
+                        print(e)
+                        return
         
-        self.server = TCPServer((bind_ip, bind_port), TCPRequestHandler)
+        self.addr = (bind_ip, bind_port)
+        self.handler_class = TCPRequestHandler
     
-    def serve_forever(self):
+    def serve_forever(self, forking=False):
+        """
+        Hand over control to the socket server event queue.
+    
+        .. note::
+            If you choose a forking server, the server can handle multiple clients a time
+            and is not "blocking" (the same way as the early real firmware embedded servers were).
+            However, the "parallel server" in a forking (=multiprocessing) model also means
+            that each client gets its own virtualized LUCIDAC due to the multiprocess nature (no
+            shared address space and thus no shared LUCIDAC memory model) of the server.
+    
+        :param forking: Choose a forking server model
+        """
+        
+        if forking:
+            class TCPServer(socketserver.ForkingMixIn, socketserver.TCPServer):
+                pass
+        else:
+            class TCPServer(socketserver.TCPServer):
+                pass
+            
+        self.server = TCPServer(self.addr, self.handler_class)
+        
         with self.server:
-            print("Server running, stop with CTRL+C")
+            print(f"Lucipy LUCIDAC Mockup Server listening at {self.addr}, stop with CTRL+C")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
