@@ -66,29 +66,38 @@ class tcpsocket:
     def send(self, sth):
         "Expects sth to be a string"
         try:
-            print(f"tcpsocket.send({sth})")
+            print(f"tcpsocket.send({sth=})")
             #self.s.sendall(sth.encode("ascii"))
-            self.fh.write(sth)
+            self.fh.write(sth + "\n")
             self.fh.flush()
             print("tcpsocket.send() completed")
-        except (BrokenPipeError, ConnectionResetError):
+        except (BrokenPipeError, ConnectionResetError) as e:
+            print(f"tcpsocket.send: {e}")
             if self.auto_reconnect:
                 self.connect()
                 return self.send(sth)
+            else:
+                raise e
     def read(self, *args, **kwargs):
         "Returns a complete line as string. See instead also: self.s.recv(123)"
         try:
             print("tcpsocket.readline()")
+            #import ipdb; ipdb.set_trace()
             return self.fh.readline()
         except ConnectionResetError:
+            print(f"tcpsocket.read: {e}")
             if self.auto_reconnect:
                 self.connect()
                 return "" # empty line, since query protcol should not readline empty socket
+            else:
+                raise e
     def has_data(self):
         return has_data(self.s)
     def __repr__(self):
         return f"tcp://{self.host}:{self.port}"
     
+# TODO: Probably refactor code, the classes tcpsocket and serialsocket share most of their logic
+
 class serialsocket:
     "Uses pyserial to connect to directly attached device"
     def __init__(self, device):
