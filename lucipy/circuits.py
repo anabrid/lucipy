@@ -236,8 +236,8 @@ class MIntBlock:
         Generate the Pybrid-CLI commands as string out of this Route representation
         """
         ret = []
-        ret += ["set-element-config carrier/0/M0/{i} ic {val}" for i,val in enumerate(self.ics) if val != 0]
-        ret += ["set-element-config carrier/0/M0/{i} k {val}" for i,val in enumerate(self.ics) if k0s != self.fast]
+        ret += [f"set-element-config carrier/0/M0/{i} ic {val}" for i,val in enumerate(self.ics) if val != 0]
+        ret += [f"set-element-config carrier/0/M0/{i} k {val}" for i,val in enumerate(self.ics) if self.k0s != self.fast]
         return "\n".join(ret)
 
 class Routing:
@@ -332,7 +332,7 @@ class Routing:
         """
         Generate the Pybrid-CLI commands as string out of this Route representation
         """
-        return "\n".join("route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
+        return "\n".join(f"route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
     
     def to_dense_matrix(self):
         """
@@ -521,12 +521,11 @@ class Circuit(Reservoir, MIntBlock, Routing):
         hc.set_circuit(self.generate())
         
     def to_pybrid_cli(self):
-        return textwrap.dedent(f"""
-        set-alias * carrier
+        nl = "\n"
+        ret = "set-alias * carrier" + nl*2
+        ret += MIntBlock.to_pybrid_cli(self) + nl
         
-        {MIntBlock.to_pybrid_cli(self)}
+        ret += Routing.to_pybrid_cli(self) + nl
         
-        {Routing.to_pybrid_cli(self)}
-        
-        # run --op-time 500000
-        """)
+        ret += "# run --op-time 500000" + nl
+        return ret

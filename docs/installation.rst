@@ -1,7 +1,7 @@
 .. _installation: 
 
-Getting started with Lucipy
-===========================
+Installation
+============
 
 One day, the prefered way is to install *lucipy* with pip:
 

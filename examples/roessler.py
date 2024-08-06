@@ -4,7 +4,7 @@ import sys, time
 from pprint import pprint
 sys.path.append("..") # use that lucipy in parent directory
 
-from lucipy import LUCIDAC, Circuit, Route
+from lucipy import LUCIDAC, Circuit, Route, Simulation
 
 ode = Circuit()
 
@@ -173,11 +173,11 @@ ode.add(roessler())
 
 if True:
 
-    from lucipy.simulator import *
+    from scipy.integrate import solve_ivp
     from pylab import *
     ion()
 
-    sim = simulation(ode)
+    sim = Simulation(ode)
     t_final=50
     #ics = [0.5, 0.1, 0]
     ics = sim.ics[0:3]

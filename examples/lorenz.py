@@ -1,7 +1,7 @@
 # Implement Lorentz attractor as in 
 # https://analogparadigm.com/downloads/alpaca_2.pdf
 
-from lucipy import LUCIDAC, Circuit, Route, Connection
+from lucipy import LUCIDAC, Circuit, Route, Connection, Simulation
 from time import sleep
 
 #lucidac_endpoint = "tcp://192.168.150.127" # Frankfurt
@@ -50,9 +50,10 @@ def f_lorenz(t, s):
 print("Circuit routes for Lorenz attractor: ")
 print(lorenz)
 
-from lucipy.simulator import *
+from scipy.integrate import solve_ivp
+from numpy import *
 
-sim= simulation(lorenz)
+sim= Simulation(lorenz)
 print(f"{sim.nonzero()=}")
 
 t_final=50
@@ -86,7 +87,7 @@ legend()
 
 
 
-if True:
+if False:
     hc = LUCIDAC(lucidac_endpoint)
     hc.query("reset")
     hc.set_config(lorenz.generate())

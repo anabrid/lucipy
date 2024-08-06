@@ -124,6 +124,7 @@ class Simulation:
         :arg method: value ``LSODA`` is good for stiff problems
     
         """
+        import numpy as np
         if np.all(ics == None):
             ics = self.ics
         elif len(ics) < len(self.ics):

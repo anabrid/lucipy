@@ -1,7 +1,7 @@
 # Implement Hindmarsh-Rose-model of a single spiking neuron
 # https://analogparadigm.com/downloads/alpaca_28.pdf
 
-from lucipy import LUCIDAC, Circuit, Route, Connection
+from lucipy import LUCIDAC, Circuit, Route, Connection, Simulation
 from time import sleep
 
 lucidac_endpoint = "tcp://192.168.150.127" # frankfurt
@@ -82,11 +82,11 @@ f_scipy = lambdify((x,y,z), rhs)
 
 if True:
 
-    from lucipy.simulator import *
+    from scipy.integrate import solve_ivp
     from pylab import *
     ion()
 
-    sim = simulation(neuron)
+    sim = Simulation(neuron)
     t_final=1000
     ics = [0.5, 0.1, 0]
     ics = [1, -1, +1]
