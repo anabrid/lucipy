@@ -109,20 +109,23 @@ def can_resolve_to(hostname, expected_ip:str):
 class ZeroconfDetector:
     def __init__(self, timeout_ms=500):
         # self.search_for = "lucidac-AA-BB-CC" # something which results in an abortion condition!
+        if not Zeroconf:
+            raise ImportError("Require Zeroconf python package in order to work")
         self.aiobrowser: Optional[AsyncServiceBrowser] = None
         self.aiozc: Optional[AsyncZeroconf] = None
         self.results: List[Endpoint] = []
         self.timeout_ns = timeout_ms*1000
         
-    def on_service_state_change(self,
-        zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
-    ) -> None:
+    def on_service_state_change(self, zeroconf, service_type: str, name: str, state_change) -> None:
+        #types are actually
+        # zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
+        # but not using them for avoiding dependencies.
         vv(f"Service {name} of type {service_type} state changed: {state_change}")
         if state_change is not ServiceStateChange.Added:
             return
         asyncio.ensure_future(self._enqueue_service_info(zeroconf, service_type, name))
         
-    async def _enqueue_service_info(self, zeroconf: Zeroconf, service_type: str, name: str):
+    async def _enqueue_service_info(self, zeroconf, service_type: str, name: str):
         info = AsyncServiceInfo(service_type, name)
         await info.async_request(zeroconf, 3000)
         vv("Zeroconf found: %r" % (info))

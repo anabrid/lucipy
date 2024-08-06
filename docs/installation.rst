@@ -3,7 +3,7 @@
 Getting started with Lucipy
 ===========================
 
-The prefered way is to install *lucipy* with pip:
+One day, the prefered way is to install *lucipy* with pip:
 
 ::
 
@@ -18,6 +18,15 @@ to or cannot use pip, the code can also be used as with
    $ cd lucipy
    $ export PYTHONPATH="${PYTHONPATH}:$PWD" # either this
    $ python                                 # or just start your python/scripts from here
+
+However, **right now** it is **not** recommended to install lucipy over the python
+package repository as we don't have stable versions yet. Instead, if you really want to
+use pip, you can do it with
+
+:: 
+
+  python -m venv foo && source foo/bin/activate # maybe you want to work in a virtual env
+  pip install git+https://github.com/anabrid/lucipy.git
 
 
 Design principles
