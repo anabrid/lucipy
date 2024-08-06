@@ -35,10 +35,8 @@ Paradigms and software technical goodies:
   This makes it super easy to get started.
 """
 
-
-
-
-# the three major entrypoints for the library:
+# the four major entrypoints for the library:
 from .synchc import LUCIDAC
 from .circuits import Circuit, Route, Connection
 from .detect import Endpoint, detect
+from .simulator import Simulation, Emulation

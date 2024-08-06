@@ -66,15 +66,20 @@ class tcpsocket:
     def send(self, sth):
         "Expects sth to be a string"
         try:
-            self.s.sendall(sth.encode("ascii"))
-        except ConnectionResetError:
+            print(f"tcpsocket.send({sth})")
+            #self.s.sendall(sth.encode("ascii"))
+            self.fh.write(sth)
+            self.fh.flush()
+            print("tcpsocket.send() completed")
+        except (BrokenPipeError, ConnectionResetError):
             if self.auto_reconnect:
                 self.connect()
                 return self.send(sth)
     def read(self, *args, **kwargs):
         "Returns a complete line as string. See instead also: self.s.recv(123)"
         try:
-            return self.fh.readline() 
+            print("tcpsocket.readline()")
+            return self.fh.readline()
         except ConnectionResetError:
             if self.auto_reconnect:
                 self.connect()
@@ -97,12 +102,15 @@ class serialsocket:
     def close(self):
         self.fh.close()
     def send(self, sth):
+        printf(f"serialsocket.send({sth})")
         self.fh.write(sth.encode("ascii") + b"\n")
+        self.fh.flush()
+        printf(f"serialsocket.send completed")
     def read(self):
         # block until have read exactly one line
         while self.has_data():
             ret = self.fh.readline()
-            #print(f"Have read: {ret}")
+            print(f"serialsocket.read(): {ret}")
             return ret
     def has_data(self):
         return has_data(self.fh)
@@ -117,16 +125,18 @@ class jsonlines():
     def makeSocket(cls, actual_socket_type, *args, **kwargs):
         return cls(actual_socket_type(*args, **kwargs))
     def send(self, sth):
-        #print(f"jsonlines.send({json.dumps(sth)}")
+        print(f"jsonlines.send({json.dumps(sth)}")
         self.sock.send(json.dumps(sth))
+        print(f"jsonlines.send completed")
     def read(self, *args, **kwargs):
+        print("jsonlines.read()")
         read = self.sock.read(*args, **kwargs)
         while not read:
             print("haven't read anything, trying again")
             time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
 
-        #print(f"jsonlines.read() got {read}")
+        print(f"jsonlines.read() got {read}")
         return json.loads(read)
         #except json.JSONDecodeError as s:
     def read_all(self):
