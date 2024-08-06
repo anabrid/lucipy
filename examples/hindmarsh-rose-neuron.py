@@ -9,9 +9,9 @@ lucidac_endpoint = "tcp://192.168.150.127" # frankfurt
 
 neuron = Circuit()
 
-i0 = neuron.int(ic=+.5, slow=False)
-i1 = neuron.int(ic=+.1, slow=False)
-i2 = neuron.int(ic=+.0, slow=True)
+i0 = neuron.int(ic=-1, slow=False)
+i1 = neuron.int(ic=+1, slow=False)
+i2 = neuron.int(ic=-1, slow=True)
 m0 = neuron.mul()
 m1 = neuron.mul()
 c  = neuron.const()
@@ -22,7 +22,6 @@ slow = 1
 neuron.connect(m1, i0,  weight=-4*slow)
 neuron.connect(m0, i0,  weight=-6*slow)
 neuron.connect(c,  i0,  weight=1)
-neuron.connect(c,  i0,  weight=0.3)
 neuron.connect(i1, i0,  weight=+7.5*slow)
 neuron.connect(i2, i0,  weight=-1*slow)
 
@@ -59,19 +58,27 @@ def f_neuron(t, s):
     return [dx, dy, dz]
 
 def f_scaled(t,s):
-    x_minus, y, z_minus = s
-    a = 4
-    b = 6
-    c = 0.066
-    d = 1.333
-    r = 1e-3
-    s = 4
-    xr = 0.8
-    Iext = 0.9
-    dx_minus = -(+a*x**3 + b*x**2 + 7.5*y + z + Iext)
-    dy = -(+d*x**2 + c + y)
-    dz_minus = -(r*s*x + r*s*xr - r*z)
-    return [dx_minus, dy, dz_minus]
+    x,y,z = s
+    k0z = 1/100
+    dx = -4*x**3 + 6*x**2 + 7.5*y - z + 1.0
+    dy = -1.33*x**2 - y + 0.066
+    dz = 0.4*x - 0.1*z + 0.32
+    return [dx,dy,k0z*dz]
+
+
+xyz = list("xyz")
+eqs = neuron.to_sympy(xyz, subst_mul=True, no_func_t=True)
+print(eqs)
+from sympy import latex, lambdify, symbols
+print(latex(eqs))
+
+rhs = [ e.rhs for e in eqs ]
+rhs[2] *= 1/100 # slower k0z
+x,y,z = symbols(xyz)
+
+f_scipy = lambdify((x,y,z), rhs)
+
+
 
 if True:
 
@@ -82,15 +89,21 @@ if True:
     sim = simulation(neuron)
     t_final=1000
     ics = [0.5, 0.1, 0]
-    #ics = [1, -1, +1]
+    ics = [1, -1, +1]
     #ics = sim.ics[0:3]
     #ics = [2,2,2]
     #ics = [1, 0.2, 0] # max_step=0.01, spikes for around t=500
+   
+    scaling = [ 1/2, 1/2, 1/15 ]
+    
+    #ics = array(ics)
 
     interest = ["x", "y", "z"]
 
     res_luci = sim.solve_ivp(t_final, clip=False, ics=ics, dense_output=False)
-    res_py   = solve_ivp(f_neuron, t_span=[0, t_final], y0=ics, dense_output=False)
+    #res_luci = solve_ivp(lambda t,s: f_scipy(*s), t_span=[0, t_final], y0=ics)
+    res_py   = solve_ivp(lambda t,s: f_scipy(*s), t_span=[0, t_final], y0=ics, dense_output=False)
+    #res_py   = solve_ivp(f_scaled, t_span=[0, t_final], y0=ics, dense_output=False)
     #res_scpy = solve_ivp(f_scaled, t_span=[0, t_final], y0=ics, dense_output=False)
     
     data_luci = res_luci.y #res_luci.sol(linspace(0,t_final,300))
@@ -126,7 +139,7 @@ if True:
                 plot(res_luci.t, dyluci[i], "--", label=f"{label} (lucisim)", color=p[0].get_color(), alpha=0.7)
             legend()
 
-else:
+if True:
     hc = LUCIDAC(lucidac_endpoint)
     hc.query("reset")
     hc.set_config(neuron.generate())
