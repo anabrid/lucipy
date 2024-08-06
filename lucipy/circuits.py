@@ -344,16 +344,56 @@ class Routing:
         for (uin, _lane, coeff, iout) in self.routes:
             UCI[iout,uin] += coeff
         return UCI
-    
-    def to_sympy(self):
+
+    def to_sympy(self, int_names=None, subst_mul=False, no_func_t=False):
         """
         Creates an ODE system in sympy based on the circuit.
+        
+        :arg int_names: Allows to overwrite the names of the integators. By default they
+           are called i_0, i_1, ... i_7. By providing a list such as ["x", "y", "z"], these
+           names will be taken. If the list is shorter then length 8, it will be filled up
+           with the default names.
+        :arg subst_mul: Substitute multiplications, getting rid of explicit Eq(m_0, ...)
+           statements. Useful for using the equation set within an ODE solver because the
+           state vector is exactly the same length of the entries.
+        :arg no_func_t: Write f instead of f(t) on the RHS, allowing for denser notations,
+           helps also in some solver contexts.
+        
+        .. warn::
+        
+           This method is part of the Routing class and therefore knows nothing about
+           the MIntBlock settings, in particular not the k0. You have to apply different
+           k0 values by yourself if neccessary! This can be as easy as to multiply the
+           equations rhs with the appropriate k0 factor.
+        
+        Example for making use of the output within a scipy solver:
+        
+        ::
+        
+            from sympy import latex, lambdify, symbols
+            from scipy.integrate import solve_ivp
+            xyz = list("xyz")
+            eqs = lucidac_circuit.to_sympy(xyz, subst_mul=True, no_func_t=True)
+            print(eqs)
+            print(latex(eqs))
+            rhs = [ e.rhs for e in eqs ]
+            x,y,z = symbols(xyz)
+            f = lambdify((x,y,z), rhs)
+            f(1,2,3) # works
+            sol = solve_ivp(f, (0, 10), [1,2,3])
+        
         """
         
-        from sympy import symbols, Function, Derivative, Eq
+        from sympy import symbols, Symbol, Function, Derivative, Eq
         
         t = symbols("t")
-        ints = [Function(f"i_{d}")(t) for d in range(8)]
+        
+        int_default_names = [ f"i_{d}" for d in range(8) ]
+        if int_names:
+            for i,n in enumerate(int_names):
+                int_default_names[i] = n
+        
+        ints = [Function(n)(t) for n in int_default_names]
         muls = [Function(f"m_{d}")(t) for d in range(4)]
         sympy_reservoir = { Int: ints, Mul: muls, Const: [1.0]*4 }
         di = [ Derivative(i, t) for i in ints ]
@@ -364,19 +404,24 @@ class Routing:
         
         min_inputs = itertools.batched(range(0,8), 2) # [(0, 1), (2, 3), (4, 5), (6, 7)]
         
-        eqs = []
+        # these will contain still-to-filter entries like Eq(m_3(t),0)
+        mul_eqs = [ Eq(mi, -(min_sums[input_indices[0]] * min_sums[input_indices[1]])) for mi, input_indices in zip(muls, min_inputs) ]
+        int_eqs = [ Eq(di[idx], min_sums[idx+DefaultLUCIDAC.MIntOffset]) for idx in range(0,8) ]
         
-        for mi, input_indices in zip(muls, min_inputs):
-            prod = -(min_sums[input_indices[0]] * min_sums[input_indices[1]])
-            if prod != 0:
-                eqs.append( Eq(mi, prod) )
-
-        for idx in range(0,8):
-            summands = min_sums[idx+DefaultLUCIDAC.MIntOffset]
-            if summands != 0:
-                eqs.append( Eq(di[idx], summands) )
-        
-        return eqs
+        if subst_mul:
+            mappings = { eq.lhs: eq.rhs for eq in mul_eqs }
+            # replace recursive calls such as in m0=x*x, my=x*m0
+            mappings = { eq.lhs: eq.rhs.subs(mappings) for eq in mul_eqs }
+            # then apply on int definitions
+            eqs = [ eq.subs(mappings) for eq in int_eqs ] 
+        else:
+            eqs = mul_eqs + int_eqs
+            
+        if no_func_t:
+            mappings = { Function(n)(t): Symbol(n) for n in int_default_names }
+            eqs = [ eq.subs(mappings) for eq in eqs]
+            
+        return [ eq for eq in eqs if eq.rhs != 0 ]
     
     def reverse(self):
         """
