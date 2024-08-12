@@ -159,7 +159,7 @@ class HybridControllerError(Exception):
         self.raw = recv_envelope
         super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: 'recv_envelope.error'")
 
-def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> Union[tcpsocket,serialsocket]:
+def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tcpsocket,serialsocket]:
     "Provides the appropriate socket for a given endpoint"
     endpoint = Endpoint(endpoint_url)
     if endpoint.asDevice(): # serial:/dev/foo
