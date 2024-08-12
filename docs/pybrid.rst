@@ -271,21 +271,27 @@ was actively explored which short-cuts and design variants can be chosen in orde
 **simple** solutions to tasks pybrid tries to solve. Therefore, literally every principle
 is reversed:
 
-No dependencies
-   Dependency hell was the major blocker for most of the team to get started with pybrid.
-   The dependencies were so fragile that even upgrades could quickly lead to no way out when
-   some third-party dependency did not succeed to compile. But what is this all for?  
-   Python already provides everything included to connect to a TCP/IP target. Therefore,
-   allow users to getting started without dependencies and import them only when needed, for
-   doing the "fancy" things.
+Focus only LUCIDAC
+   Lucipy is only a code for the LUCIDAC. Since the design of the LUCIDAC is so much simpler
+   then the    design of the REDAC, it also allows the client code to be dramatically simpler.
+   The code does not even try to model advanced REDAC usage patterns but instead
+   sticks to the simplicisty of the Model-1 and THAT Hybrid controllers.
+   
+Does not reimplement the firmware API
+   A good portion of pybrids code is due to the approach to reimplement the class structure
+   provided within the Firmware. This ad-hoc RPC implementation is of high maintenance
+   since it requires manual labour whenever a change in the upstream API (in the firmware)
+   happens. Instead, lucipy looks for a loose coupling. Users are encouraged to build JSON
+   objects on their own instead of dealing with class hierarchies within Python. A scalable
+   answer for a low-maintenance RPC system is without the scope of lucipy, it just tries to
+   deal with the existing situation with as little code as possible.
 
-No typing
-   There is little advantage of having a loosely typed server (firmware without typed JSON mapping)
-   but a strongly typed client (pybrid with `pydantic <https://docs.pydantic.dev/>`_), hosted
-   in a loosely typed language such as Python. It also reduces development speed when the
-   protocol itself is in change. So for the time being, lucipy does not provide any assistance
-   on correctly typed protocol messages. Instead, it intentionally makes it easy to write any kind of
-   messages to the microcontroller.
+Extensible by default.
+   :py:meth:`~lucipy.synchc.LUCIDAC.query` is a perfectly valid way to interact with the
+   :py:class:`~lucipy.synchc.LUCIDAC` whereas
+   the `pybrid.redac.controller.Controller <https://anabrid.dev/docs/pybrid/html/redac/hybrid-controller.html>`_
+   does not even provide a method to send arbitrary commands. This makes lucipy the
+   ideal client for implmenting new LUCIDAC features.
 
 No async co-routines
    My personal preference is that async gives a terrible programmer's experience
@@ -295,6 +301,14 @@ No async co-routines
    let's get back to the start and work synchronously, which *dramatically* reduces the
    mental load.
 
+No typing
+   There is little advantage of having a loosely typed server (firmware without typed JSON mapping)
+   but a strongly typed client (pybrid with `pydantic <https://docs.pydantic.dev/>`_), hosted
+   in a loosely typed language such as Python. It also reduces development speed when the
+   protocol itself is in change. So for the time being, lucipy does not provide any assistance
+   on correctly typed protocol messages. Instead, it intentionally makes it easy to write any kind of
+   messages to the microcontroller.
+
 Not a framework
    My personal preference between frameworks and libraries are *always* libraries. Frameworks
    dramatically reduce the freedom of implementing near ideas. One of the three modes of operation
@@ -302,12 +316,20 @@ Not a framework
    Pybrid provides an hard to use async library, instead lucipy tries to provide an as simple
    as possible sync library.
 
+No dependencies
+   Dependency hell was the major blocker for most of the team to get started with pybrid.
+   The dependencies were so fragile that even upgrades could quickly lead to no way out when
+   some third-party dependency did not succeed to compile. But what is this all for?  
+   Python already provides everything included to connect to a TCP/IP target. Therefore,
+   allow users to getting started without dependencies and import them only when needed, for
+   doing the "fancy" things.
+
 Not a CLI
    Python is not a good language for command line interfaces (CLIs). Python dependency managament
    is a nightmare (see above) and we frequently had the situation that the code seems to be installed
-   fine but the CLI was not working at all. Pybrid did not even provide findable entry points such as
+   fine but the CLI was not working at all. Pybrid does not even provide findable entry points such as
    ``python -m pybrid.foo.bar.baz -- --help``.
-
+   
 Do not copy pybrid
    In the end, pybrid is working for some people and we don't want to break their workflows or
    develop an in-house concurrency. Therefore, lucipy tries to be *orthogonal* in terms of features.
@@ -328,10 +350,6 @@ Do not implement a compiler
    tries to provide as few code as possible to make this more comfortable, without implementing too
    many logic.
    
-Focus only LUCIDAC
-   Lucipy is only a code for the LUCIDAC. Since the design of the LUCIDAC is so much simpler then the
-   design of the REDAC, it also allows the client code to be dramatically simpler.
-
 Be user friendly at heart
    Lucipy was developed in a time when LUCIDAC was shortly before being released. At this time, a lot
    of focus was put on making the device user friendly. This is the reason why for instance the connection
