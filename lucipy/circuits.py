@@ -19,7 +19,7 @@ and setup the circuit configuration low level.
 
 import functools, operator, textwrap, pprint, itertools
 from collections import namedtuple
-from typing import get_args, List, Dict
+from typing import get_args, List, Dict, Union, Optional
 
 # like sum(lst, []) but accepts generators instead of lists
 flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
@@ -38,7 +38,7 @@ def window(seq, n=2):
         yield result
 
 
-def next_free(occupied: List[bool], append_to:int=None) -> int|None:
+def next_free(occupied: List[bool], append_to:int=None) -> Optional[int]:
     """
     Looks for the first False value within a list of truth values.
 
@@ -61,7 +61,7 @@ def next_free(occupied: List[bool], append_to:int=None) -> int|None:
 Int = namedtuple("Int", ["id", "out", "a"])
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])
 Const = namedtuple("Const", ["id", "out" ])
-Ele = Int|Mul|Const
+Ele = Union[Int,Mul,Const]
 
 
 class DefaultLUCIDAC:
@@ -189,7 +189,7 @@ class Reservoir:
 
 Route = namedtuple("Route", ["uin", "lane", "coeff", "iout"])
 
-def Connection(source:Ele|int, target:Ele|int, weight=1):
+def Connection(source:Union[Ele,int], target:Union[Ele,int], weight=1):
     """
     Transforms an argument list somewhat similar to a "logical route" in the
     lucicon code to a physical route.
@@ -222,11 +222,11 @@ class MIntBlock:
         self.ics = [0.0]*DefaultLUCIDAC.num_int
         self.k0s = [self.fast]*DefaultLUCIDAC.num_int
         
-    def set_ic(self, el:Int|int, val:float):
+    def set_ic(self, el:Union[Int,int], val:float):
         el = el.id if isinstance(el, Int) else el
         self.ics[el] = val
     
-    def set_k0(self, el:Int|int, val:float):
+    def set_k0(self, el:Union[Int,int], val:float):
         el = el.id if isinstance(el, Int) else el
         self.k0s[el] = val
         
@@ -277,7 +277,7 @@ class Routing:
             raise ValueError(f"All {self.available_lanes()} available lanes occupied, no more connections possible.")
         return self.available_lanes()[idx]
     
-    def add(self, route_or_list_of_routes:Route|List[Route]):
+    def add(self, route_or_list_of_routes:Union[Route,List[Route]]):
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
         route = route_or_list_of_routes
@@ -290,7 +290,7 @@ class Routing:
         self.routes.append(physical)
         return physical
 
-    def connect(self, source:Ele|int, target:Ele|int, weight=1):
+    def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
         return self.add(Connection(source,target,weight))
     
     def routes2matrix(self):
