@@ -20,6 +20,7 @@ also runs fine without.
 # all this is only python standard library  :)
 import logging, time, socket, select, json, types, typing, \
     itertools, os, functools, collections, uuid, time
+from types import Union
 log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
 
