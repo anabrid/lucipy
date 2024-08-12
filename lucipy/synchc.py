@@ -84,7 +84,7 @@ class tcpsocket:
             #print("tcpsocket.readline()")
             #import ipdb; ipdb.set_trace()
             return self.fh.readline()
-        except ConnectionResetError:
+        except ConnectionResetError as e:
             print(f"tcpsocket.read: {e}")
             if self.auto_reconnect:
                 self.connect()
@@ -153,7 +153,11 @@ class jsonlines():
             yield self.read()
 
 class HybridControllerError(Exception):
-    pass
+    def __init__(self, recv_envelope):
+        self.code = recv_envelope.code
+        self.type = recv_envelope.type
+        self.raw = recv_envelope
+        super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: 'recv_envelope.error'")
 
 def endpoint2socket(endpoint_url:Endpoint|str) -> tcpsocket|serialsocket:
     "Provides the appropriate socket for a given endpoint"
@@ -179,7 +183,7 @@ class Run:
     def __init__(self, hc):
         self.hc = hc
     
-    def data(self) -> typing.Iterator[list[float]]:
+    def data(self) -> typing.Iterator[typing.List[float]]:
         """
         "Slurp" all data aquisition from the run. Basically a "busy wait" or
         "synchronous wait" until the run finishes.
@@ -379,7 +383,15 @@ class LUCIDAC:
         if "/M0" in config and not "ic_time" in self.run_config:
             self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
         
-        return self.query("set_config", outer_config)
+        # todo: Should determine before which is the correct call, for instance by
+        #       evaluating what help() returns.
+        try:
+            return self.query("set_config", outer_config)
+        except HybridControllerError as e:
+            if e.code == -10:
+                return self.query("set_circuit", outer_config)
+            else:
+                raise e
     
     def set_circuit(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
@@ -387,6 +399,9 @@ class LUCIDAC:
     
     def set_by_path(self, path, config):
         """
+        Attention, this is ON THE CARRIER.
+        Note that not all entities are on the carrier, such as the front panel!
+        
         path is a string like ``["/C", "17", "factor"]``
         """
         cluster_index = 0
@@ -395,6 +410,16 @@ class LUCIDAC:
             "config": config
         }
         return self.query("set_config", outer_config)
+    
+    def set_leds(self, leds_as_integer):
+        # Cannot use set_circuit because it operates only on th Carrier
+        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
+        
+    def signal_generator(self, dac=None):
+        """
+        :args dac: Digital analog converter outputs, as there are two a list with two floats (normalized [-1,+1]) is expected
+        """
+        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "signal_generator":  { "dac_outputs": dac } } })
     
     def set_op_time(self, *, ns=0, us=0, ms=0):
         """

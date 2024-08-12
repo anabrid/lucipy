@@ -180,7 +180,7 @@ class ZeroconfDetector:
             return self.results
 
 
-def detect_usb_teensys() -> list[Endpoint]:
+def detect_usb_teensys() -> List[Endpoint]:
     "Yields all found endpoints on local system using serial.tools.list_ports, requires pyserial"
     teensy_vid = 0x16C0
     teensy_pid = 0x0483
@@ -199,14 +199,14 @@ def detect_usb_teensys() -> list[Endpoint]:
     
     return found
 
-def detect_network_teensys(zeroconf_timeout=500) -> list[Endpoint]:
+def detect_network_teensys(zeroconf_timeout=500) -> List[Endpoint]:
     "Yields all endpoints in the local broadcast domain using Zeroconf, requires python zeroconf package"
     if not Zeroconf:
         raise ModuleNotFoundError("lucipy.detect.detect_network_teensys requires zeroconf, install with 'pip install zeroconf'")
     
     return ZeroconfDetector(zeroconf_timeout).sync_start()
 
-def detect(single=False, prefer_network=True, zeroconf_timeout=500) -> Endpoint | None | list[Endpoint]:
+def detect(single=False, prefer_network=True, zeroconf_timeout=500) -> Endpoint | None | List[Endpoint]:
     """
     Yields or returns possible endpoints.
 

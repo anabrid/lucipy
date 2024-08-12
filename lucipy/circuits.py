@@ -19,7 +19,7 @@ and setup the circuit configuration low level.
 
 import functools, operator, textwrap, pprint, itertools
 from collections import namedtuple
-from typing import get_args
+from typing import get_args, List, Dict
 
 # like sum(lst, []) but accepts generators instead of lists
 flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
@@ -38,7 +38,7 @@ def window(seq, n=2):
         yield result
 
 
-def next_free(occupied: list[bool], append_to:int=None) -> int|None:
+def next_free(occupied: List[bool], append_to:int=None) -> int|None:
     """
     Looks for the first False value within a list of truth values.
 
@@ -127,7 +127,7 @@ class Reservoir:
     configurable properties of the stateful computing element (Integrator)
     is managed by the MIntBlock class below.
     """
-    allocated: dict[Ele,list[bool]]
+    allocated: Dict[Ele,List[bool]]
     
     def __init__(self, allocation=None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
@@ -162,10 +162,14 @@ class Reservoir:
         except IndexError:
             raise ValueError(f"Have only {len(allocated[t])} Computing Elements of Type {t} available, inexistent id {id} requested.")
 
+    # TODO: Rename to "integrator" in order to make sure
+    #       it is not misunderstood as "integration"
     def int(self, id=None):
         "Allocate an Integrator. If you pass an id, allocate that particular integrator."
         return self.alloc(Int, id)
 
+    # TODO: Rename to "multiplier" in order to make sur
+    #       it is not misunderstood as "multiplication"
     def mul(self, id=None):
         "Allocate a Multiplier. If you pass an id, allocate that particular multiplier."
         return self.alloc(Mul, id)
@@ -207,8 +211,8 @@ class MIntBlock:
     """
     Stateful configuration about all the MIntBlock.
     """
-    #ics : list[float]
-    #k0s : list[int]
+    #ics : List[float]
+    #k0s : List[int]
     
     slow =    100
     fast = 10_000
@@ -246,7 +250,7 @@ class Routing:
     generates the Output-centric matrix configuration at the end.
     """
     max_lanes = 32
-    #routes : list[Route]
+    #routes : List[Route]
     
     def available_lanes(self):
         # for a fully functional lucidac, do this:
@@ -257,7 +261,7 @@ class Routing:
     def __repr__(self):
         return f"Routing({pprint.pformat(self.routes)})"
     
-    def __init__(self, routes: list[Route] = None, **kwargs):
+    def __init__(self, routes: List[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = routes if routes else []
     
@@ -273,7 +277,7 @@ class Routing:
             raise ValueError(f"All {self.available_lanes()} available lanes occupied, no more connections possible.")
         return self.available_lanes()[idx]
     
-    def add(self, route_or_list_of_routes:Route|list[Route]):
+    def add(self, route_or_list_of_routes:Route|List[Route]):
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
         route = route_or_list_of_routes
@@ -474,7 +478,7 @@ class Circuit(Reservoir, MIntBlock, Routing):
     It also can generate the final configuration format required for LUCIDAC.
     """
     
-    def __init__(self, routes: list[Route] = []):
+    def __init__(self, routes: List[Route] = []):
         super().__init__(routes=routes)
     
     def int(self, *, id=None, ic=0, slow=False):

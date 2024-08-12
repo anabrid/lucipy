@@ -370,9 +370,10 @@ class Emulation:
             
         return decorate_protocol_reply(ret)
     
-    def __init__(self, bind_ip="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
+    def __init__(self, bind_addr="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
         """
-        :arg bind_ip: Adress to bind to, can also be a hostname. Use "0.0.0.0" to listen on all interfaces.
+        :arg bind_addr: Adress to bind to, can also be a hostname. Use "0.0.0.0" to listen on all interfaces.
+        :art bind_port: TCP port to bind to
         """
         self.mac = emulated_mac
         self.reset()
@@ -404,7 +405,7 @@ class Emulation:
                         print(e)
                         return
         
-        self.addr = (bind_ip, bind_port)
+        self.addr = (bind_addr, bind_port)
         self.handler_class = TCPRequestHandler
     
     def serve_forever(self, forking=False):

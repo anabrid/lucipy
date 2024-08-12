@@ -15,59 +15,61 @@ What follows is quickly drawn ASCII diagram of this particular
 analog computer topology (we have much nicer schemata available which will evventually
 replace this one):
 
-::
+.. only::html
 
-                                                                        
-         ┌───────────────────────      ┌──────────────────────────────┐
-         │Math Block M1     m0  0  ->  │U Block                       │
-         │4 x Multipliers   m1  1      │16 inputs, fanout on          │
-         │2in, 1out each    m2  2      │32 outputs (called lanes)     │
-         │                  m3  3      │                              │
-   ┌───► │                  .   4 ───► │It is a 16x32 bitmatrix.      │
-   │     │constant givers   .   5      │                              │
-   │     │                  .   6      │                              │
-   │     │                  .   7  ->  │                              │
-   │     └───────────────────────      │                              │
-   │                                   │                              │
-   │     ┌───────────────────────      │                              │
-   │     │Math Block M2     i0  8  ->  │                              │
-   │     │8 x Integrators   i1  9      │                              │
-   │     │1in, 1out each    i2 10      │                              │
-   │     │                  i3 11 ───► │                              │
-   │  ┌► │                  i4 12      │                              │
-   │  │  │            i     i5 13      │                              │
-   │  │  │                  i6 14      │                              │
-   │  │  │                  i7 15  ->  │                              │
-   │  │  └───────────────────────      └──────────────┬───────────────┘
-   │  │                                               │                
-   │  │                                ┌──────────────▼───────────────┐
-   │  │                                │C block.                      │
-   │  │                                │32 coefficients               │
-   │  │                                │value [-20,+20] each          │
-   │  │                                │                              │
-   │  │                                └──────────────┬───────────────┘
-   │  │                                               │                
-   │  │   ┌───────────────────────     ┌──────────────▼───────────────┐
-   │  │   │Math Block M1     m0a 0 <-  │I Block                       │
-   │  │   │4 x Multipliers   m0b 1     │32 inputs, fanin to           │
-   │  │   │2in, 1out each    m1a 2     │16 outputs                    │
-   │  │   │                  m1b 3 ◄───┤                              │
-   └──┼── │                  m2a 4     │It is a 32x16 bitmatrix       │
-      │   │constant givers   m2b 5     │which performs implicit       │
-      │   │                  m3a 6     │summation of currents         │
-      │   │                  m3b 7 <-  │                              │
-      │   └───────────────────────     │                              │
-      │                                │                              │
-      │   ┌───────────────────────     │                              │
-      │   │Math Block M2     i0  8 <-  │                              │
-      │   │8 x Integrators   i1  9     │                              │
-      │   │1in, 1out each    i2 10     │                              │
-      │   │                  i3 11     │                              │
-      │   │                  i4 12 ◄───┤                              │
-      └───┤                  i5 13     │                              │
-          │                  i6 14     │                              │
-          │                  i7 15 <-  │                              │
-          └───────────────────────     └──────────────────────────────┘
+   ::
+
+                                                                           
+            ┌───────────────────────      ┌──────────────────────────────┐
+            │Math Block M1     m0  0  ->  │U Block                       │
+            │4 x Multipliers   m1  1      │16 inputs, fanout on          │
+            │2in, 1out each    m2  2      │32 outputs (called lanes)     │
+            │                  m3  3      │                              │
+      ┌───► │                  .   4 ───► │It is a 16x32 bitmatrix.      │
+      │     │constant givers   .   5      │                              │
+      │     │                  .   6      │                              │
+      │     │                  .   7  ->  │                              │
+      │     └───────────────────────      │                              │
+      │                                   │                              │
+      │     ┌───────────────────────      │                              │
+      │     │Math Block M2     i0  8  ->  │                              │
+      │     │8 x Integrators   i1  9      │                              │
+      │     │1in, 1out each    i2 10      │                              │
+      │     │                  i3 11 ───► │                              │
+      │  ┌► │                  i4 12      │                              │
+      │  │  │            i     i5 13      │                              │
+      │  │  │                  i6 14      │                              │
+      │  │  │                  i7 15  ->  │                              │
+      │  │  └───────────────────────      └──────────────┬───────────────┘
+      │  │                                               │                
+      │  │                                ┌──────────────▼───────────────┐
+      │  │                                │C block.                      │
+      │  │                                │32 coefficients               │
+      │  │                                │value [-20,+20] each          │
+      │  │                                │                              │
+      │  │                                └──────────────┬───────────────┘
+      │  │                                               │                
+      │  │   ┌───────────────────────     ┌──────────────▼───────────────┐
+      │  │   │Math Block M1     m0a 0 <-  │I Block                       │
+      │  │   │4 x Multipliers   m0b 1     │32 inputs, fanin to           │
+      │  │   │2in, 1out each    m1a 2     │16 outputs                    │
+      │  │   │                  m1b 3 ◄───┤                              │
+      └──┼── │                  m2a 4     │It is a 32x16 bitmatrix       │
+         │   │constant givers   m2b 5     │which performs implicit       │
+         │   │                  m3a 6     │summation of currents         │
+         │   │                  m3b 7 <-  │                              │
+         │   └───────────────────────     │                              │
+         │                                │                              │
+         │   ┌───────────────────────     │                              │
+         │   │Math Block M2     i0  8 <-  │                              │
+         │   │8 x Integrators   i1  9     │                              │
+         │   │1in, 1out each    i2 10     │                              │
+         │   │                  i3 11     │                              │
+         │   │                  i4 12 ◄───┤                              │
+         └───┤                  i5 13     │                              │
+            │                  i6 14     │                              │
+            │                  i7 15 <-  │                              │
+            └───────────────────────     └──────────────────────────────┘
 
 Concept
 -------
