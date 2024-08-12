@@ -206,7 +206,7 @@ def detect_network_teensys(zeroconf_timeout=500) -> List[Endpoint]:
     
     return ZeroconfDetector(zeroconf_timeout).sync_start()
 
-def detect(single=False, prefer_network=True, zeroconf_timeout=500) -> Optional[Endpoint | List[Endpoint]]:
+def detect(single=False, prefer_network=True, zeroconf_timeout=500):# -> Optional[Endpoint | List[Endpoint]]:
     """
     Yields or returns possible endpoints.
 
