@@ -66,7 +66,7 @@ class tcpsocket:
     def send(self, sth):
         "Expects sth to be a string"
         try:
-            #print(f"tcpsocket.send({sth=})")
+            print(f"tcpsocket.send({sth=})")
             #self.s.sendall(sth.encode("ascii"))
             self.fh.write(sth + "\n")
             self.fh.flush()
@@ -83,7 +83,12 @@ class tcpsocket:
         try:
             #print("tcpsocket.readline()")
             #import ipdb; ipdb.set_trace()
-            return self.fh.readline()
+            line = self.fh.readline()
+            print(f"tcpsocket.read() = {line}")
+            return line
+        except UnicodeDecodeError as e:
+            print(e)
+            return ""
         except ConnectionResetError as e:
             print(f"tcpsocket.read: {e}")
             if self.auto_reconnect:
@@ -157,7 +162,7 @@ class HybridControllerError(Exception):
         self.code = recv_envelope.code
         self.type = recv_envelope.type
         self.raw = recv_envelope
-        super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: 'recv_envelope.error'")
+        super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: '{recv_envelope.error}'")
 
 def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tcpsocket,serialsocket]:
     "Provides the appropriate socket for a given endpoint"
@@ -190,7 +195,7 @@ class Run:
         data() returns once the run is stopped and yields data otherwise.
         Therefore usage can be just like `list(hc.run().data())`
         """
-        envelope = hc.sock.read()
+        envelope = self.hc.sock.read()
         if envelope["type"] == "run_data":
             # TODO check for proper run id and entity.
             msg_data = envelope["msg"]["data"];
@@ -363,6 +368,17 @@ class LUCIDAC:
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
+    def _set_config_rev0_or_1(self, outer_config):
+        # todo: Should determine before which is the correct call, for instance by
+        #       evaluating what help() returns.
+        try:
+            return self.query("set_config", outer_config)
+        except HybridControllerError as e:
+            if e.code == -10:
+                return self.query("set_circuit", outer_config)
+            else:
+                raise e
+    
     def set_config(self, config):
         """
         config being something like ``dict("/U": ..., "/C": ...)``, i.e. the entities
@@ -383,15 +399,8 @@ class LUCIDAC:
         if "/M0" in config and not "ic_time" in self.run_config:
             self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
         
-        # todo: Should determine before which is the correct call, for instance by
-        #       evaluating what help() returns.
-        try:
-            return self.query("set_config", outer_config)
-        except HybridControllerError as e:
-            if e.code == -10:
-                return self.query("set_circuit", outer_config)
-            else:
-                raise e
+        return self._set_config_rev0_or_1(outer_config)
+        
     
     def set_circuit(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
@@ -399,27 +408,43 @@ class LUCIDAC:
     
     def set_by_path(self, path, config):
         """
-        Attention, this is ON THE CARRIER.
-        Note that not all entities are on the carrier, such as the front panel!
+        Set element configuration by path.
         
-        path is a string like ``["/C", "17", "factor"]``
+        This is a fine-granular alternative to :meth:`set_circuit`.
+        
+        .. warning::
+        
+           Attention, this is ON THE CARRIER, i.e. the path relative to the carrier.
+           Note that not all entities are on the carrier, such as the front panel!
+        
+        path is a string like ``["C", "17", "factor"]``
+        
+        .. note::
+        
+           Note that the path typically does NOT include something like "/C" or "/M0"
+           but rather "C" or "M0".
+        
+        Example:
+        
+        >>> config = hc.get_config()["config"]["/0"]
+        >>> hc.set_by_path(["M0"], config["/M0"])
         """
         cluster_index = 0
         outer_config = {
             "entity": [self.get_mac(), str(cluster_index)] + path,
             "config": config
         }
-        return self.query("set_config", outer_config)
+        return self._set_config_rev0_or_1(outer_config)
     
     def set_leds(self, leds_as_integer):
         # Cannot use set_circuit because it operates only on th Carrier
-        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
+        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
         
     def signal_generator(self, dac=None):
         """
         :args dac: Digital analog converter outputs, as there are two a list with two floats (normalized [-1,+1]) is expected
         """
-        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "signal_generator":  { "dac_outputs": dac } } })
+        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": { "signal_generator":  { "dac_outputs": dac } } })
     
     def set_op_time(self, *, ns=0, us=0, ms=0):
         """
@@ -487,9 +512,9 @@ class LUCIDAC:
         self.run_config.halt_on_external_trigger = halt_on_external_trigger
         self.run_config.halt_on_overload = halt_on_overload
         if ic_time:
-            self.run.config.ic_time = ic_time
+            self.run_config.ic_time = ic_time
         if op_time:
-            self.run.config.op_time = op_time
+            self.run_config.op_time = op_time
         return self.run_config
 
     def start_run(self) -> Run:

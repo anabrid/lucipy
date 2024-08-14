@@ -5,10 +5,17 @@ Example circuits
 
 This page collects example codes which mainly demonstrate the :ref:`lucipy-comp` machinery
 but also touches other parts of the lucipy library.
-Note that this are currently not nicely prepared examples
-but more or less work benches demonstrating how to configure a circuit and to simulate it
-numerically or run it on real LUCIDACs. If not noted otherwise, the example codes are working.
 
+The examples demonstrate different simple mathematical problems and how to implement
+them on LUCIDAC using the *lucipy* software. The examples highlight different parts such as
+circuit modeling, digital (numerical) circuit simulation as well as steering the analog computer.
+
+Python scripts
+--------------
+
+The following examples are short single file standalone scripts which you can download and
+execute if you have lucipy installed. You can find them in the ``examples`` directory of
+the lucipy repository.
 
 :download:`Rössler <../examples/roessler.py>`
    Rössler attractor on LUCIDAC, as from 
@@ -27,6 +34,18 @@ numerically or run it on real LUCIDACs. If not noted otherwise, the example code
 :download:`Euler spiral <../examples/euler.py>`
    Euler spiral on LUCIDAC, cf. 
    `Analog Paradigm Application Note 33 <https://analogparadigm.com/downloads/alpaca_33.pdf>`_.
+   (Software simulation)
 
-We plan to show better examples as Jupyter Notebooks where one can see graphs, math, etc. all
-on one page.
+
+Jupyter notebooks
+-----------------
+
+The following examples are Jupyter/IPython notebooks which combine text/explanations next to
+editable and runnable code as well as their (potentially interactive) output, i.e. plots and 
+images into single files. They are included into this documentation as "snapshots" and are a
+great experience to get started with lucipy.
+
+.. toctree::
+   :maxdepth: 2
+
+   examples/Schroedinger.ipynb

@@ -1,10 +1,10 @@
 from lucipy import LUCIDAC, Circuit, Route
-from lucipy.simulator import simulation
+from lucipy.simulator import Simulation
 from time import sleep
 
 ode = Circuit()
 
-x = ode.int(id=0, ic=1)
+x = ode.int(id=0, ic=-1)
 y = ode.int(id=1, ic=0)
 z = ode.int(id=2, ic=0)
 c = ode.const()
@@ -13,10 +13,10 @@ m1 = ode.mul()
 m2 = ode.mul()
 
 routes = [
-    #Route(c.out,  coeff, -0.5,  x.a),
+    Route(c.out,  0, +0.5,  x.a),
     
-    Route(x.out,  0,    +0.5,  y.a),
-    Route(y.out,  1,    -0.5,  x.a),
+    #Route(x.out,  0,    +0.5,  y.a),
+    #Route(y.out,  1,    -0.5,  x.a),
     
 #    Route(c.out,  2,   -1.0, m0.a),
 #    Route(x.out,  3,    1.0, m0.b),
@@ -56,12 +56,13 @@ if False:
 
 #lucidac_endpoint = "tcp://192.168.150.127" # Frankfurt
 lucidac_endpoint = "tcp://192.168.102.230" # Ulm
+lucidac_endpoint = "tcp://192.168.100.143" # Frankfurt in Ulm
 
 hc = LUCIDAC(lucidac_endpoint)
 hc.query("reset")
 hc.set_config(ode.generate())
 
-manual_control = False
+manual_control = True
 if manual_control:
     print("IC")
     hc.query("manual_mode", dict(to="ic"))

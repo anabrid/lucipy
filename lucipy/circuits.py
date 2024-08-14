@@ -293,10 +293,21 @@ class Routing:
     def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
         return self.add(Connection(source,target,weight))
     
-    def routes2matrix(self):
+    def routes2input(self):
         """
-        AoS->SoA Reduced Matrix (=input) representation, as in lucidon/mapping.ts
-        These are the spare matrix formats used by the protocol.
+        Converts the list of routes to an *input matrix representation*. In this format,
+        the U/C/I matrix are each represented as a list of 32 numbers.
+        This is basically an array-of-structures to structure-of-array (AoS-to-SoA) operation
+        and inspired by the *lucicon* circuit compiler (part of `lucigui <https://github.com/anabrid/lucigui>`_).    
+        See :meth:`generate` for the actual high-level method for the spare matrix format used
+        by the LUCIDAC protocol.
+    
+        .. warning::
+    
+           The C matrix values in this representation are floats within ``[-20,+20]`` and not
+           yet rescaled (as in REV1 hardware). See :meth:`coeff_upscale` for the code which shifts
+           this information.
+    
         """
         return dict(
             u=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
@@ -316,6 +327,12 @@ class Routing:
                 else:
                     output[clane].append(lane)
         return output if keep_arrays else clean(output)
+    
+    @staticmethod
+    def coeff_upscale(c_elements):
+        upscaling = [ (-10 < v or v > 10) for v in c_elements ]
+        scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
+        return upscaling, scaled_c
         
 
     def generate(self):
@@ -323,11 +340,12 @@ class Routing:
         Generate the configuration data structure required by the protocol, which is
         that "output-centric configuration".
         """
-        mat = self.routes2matrix()
+        mat = self.routes2input()
+        upscaling, scaled_c = coeff_upscale(mat["c"])
         return {
             "/U": dict(outputs = mat["u"]),
-            "/C": dict(elements =  mat["c"]),
-            "/I": dict(outputs = self.input2output(mat["i"]))
+            "/C": dict(elements = scaled_c),
+            "/I": dict(outputs = self.input2output(mat["i"]), upscaling = upscaling)
         }
         # TODO: Ublock Altsignals, where in REV1?
         # ret["/U"]["alt_signals"] = [False]*8

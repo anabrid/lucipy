@@ -122,6 +122,18 @@ class Simulation:
         :arg clip: Whether to carry out bounded-in-bounded-out value clipping as a real analog computer would do
         :arg dense_output: value ``True``allows for interpolating on ``res.sol(linspace(...))``
         :arg method: value ``LSODA`` is good for stiff problems
+        :arg t_eval: In order to get a solution on equidistant time, for instance you can
+           pass this option an ``np.linspace(0, t_final, num=500)``
+        
+        Quick usage example:
+        
+        >>> e = Circuit()
+        >>> ramp  = e.int(ic = -1)  # makes an Integrator
+        >>> const = e.const()       # makes a  Constant giver
+        >>> e.connect(const, ramp, weight = 0.1)
+        >>> result = Simulation(e).solve_ivp(500)
+        >>> ramp_result = result.y[0] # unpack the first integrator output
+        >>> plt.plot(result.t, ramp_result) # plot against solution times
     
         """
         import numpy as np
