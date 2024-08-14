@@ -24,5 +24,9 @@ numerically or run it on real LUCIDACs. If not noted otherwise, the example code
    Single Spiking Neuron Model on LUCIDAC, as from 
    `Analog Paradigm Application Note 28 <https://analogparadigm.com/downloads/alpaca_28.pdf>`_.
 
+:download:`Euler spiral <../examples/euler.py>`
+   Euler spiral on LUCIDAC, cf. 
+   `Analog Paradigm Application Note 33 <https://analogparadigm.com/downloads/alpaca_33.pdf>`_.
+
 We plan to show better examples as Jupyter Notebooks where one can see graphs, math, etc. all
 on one page.
