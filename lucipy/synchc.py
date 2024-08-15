@@ -426,8 +426,8 @@ class LUCIDAC:
         
         Example:
         
-        >>> config = hc.get_config()["config"]["/0"]
-        >>> hc.set_by_path(["M0"], config["/M0"])
+        >>> config = hc.get_config()["config"]["/0"]  # doctest: +SKIP
+        >>> hc.set_by_path(["M0"], config["/M0"])     # doctest: +SKIP
         """
         cluster_index = 0
         outer_config = {
