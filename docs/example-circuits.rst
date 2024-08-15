@@ -36,6 +36,11 @@ the lucipy repository.
    `Analog Paradigm Application Note 33 <https://analogparadigm.com/downloads/alpaca_33.pdf>`_.
    (Software simulation)
 
+:download:`Sprott SQm system <../examples/sqm.py>`
+   A nice chaotic system due to Sprott, cf. 
+   `Analog Paradigm Application Note 31 <https://analogparadigm.com/downloads/alpaca_31.pdf>`_.
+   (Software simulation)
+
 
 Jupyter notebooks
 -----------------
