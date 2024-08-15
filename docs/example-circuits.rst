@@ -46,6 +46,10 @@ the lucipy repository.
    `Analog Paradigm Application Note 43 <https://analogparadigm.com/downloads/alpaca_43.pdf>`_.
    (Software simulation)
 
+:download:`A chaotic system due to Lorenz, 1984 <../examples/lorenz84.py>`
+   A chaotic system due to Lorenz in 1984 on LUCIDAC
+   (Software simulation)
+
 Jupyter notebooks
 -----------------
 
