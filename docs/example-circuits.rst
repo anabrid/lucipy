@@ -50,6 +50,11 @@ the lucipy repository.
    A chaotic system due to Lorenz in 1984 on LUCIDAC
    (Software simulation)
 
+:download:`A three-time-scale system <../examples/ttss.py>`
+   A three-time-scale-system on LUCIDAC, cf. 
+   `Analog Paradigm Application Note 44 <https://analogparadigm.com/downloads/alpaca_44.pdf>`_.
+   (Software simulation)
+
 Jupyter notebooks
 -----------------
 
