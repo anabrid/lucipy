@@ -254,7 +254,7 @@ class LUCIDAC:
     
     # Commands which can be memoized for a given endpoint/instance, makes
     # it cheaper to call them repeatedly
-    memoizable = "get_entities sys_ident".split()
+    memoizable = "sys_ident".split()
     
     def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
         if not endpoint_url:

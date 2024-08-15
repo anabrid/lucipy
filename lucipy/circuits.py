@@ -254,9 +254,9 @@ class Routing:
     
     def available_lanes(self):
         # for a fully functional lucidac, do this:
-        #return range(32)
+        return list(range(32))
         # Instead, we know these lanes are working only:
-        return [0,1,2,3,4,5, 14,15, 16,17, 18,19, 20,21, 30,31]
+        #return [0,1,2,3,4,5, 14,15, 16,17, 18,19, 20,21, 30,31]
     
     def __repr__(self):
         return f"Routing({pprint.pformat(self.routes)})"
@@ -330,7 +330,7 @@ class Routing:
     
     @staticmethod
     def coeff_upscale(c_elements):
-        upscaling = [ (-10 < v or v > 10) for v in c_elements ]
+        upscaling = [ (v < -1 or v > 1) for v in c_elements ]
         scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
         return upscaling, scaled_c
         
@@ -341,7 +341,7 @@ class Routing:
         that "output-centric configuration".
         """
         mat = self.routes2input()
-        upscaling, scaled_c = coeff_upscale(mat["c"])
+        upscaling, scaled_c = self.coeff_upscale(mat["c"])
         return {
             "/U": dict(outputs = mat["u"]),
             "/C": dict(elements = scaled_c),
