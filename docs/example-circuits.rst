@@ -41,6 +41,10 @@ the lucipy repository.
    `Analog Paradigm Application Note 31 <https://analogparadigm.com/downloads/alpaca_31.pdf>`_.
    (Software simulation)
 
+:download:`Yet another chaotic Sprott system <../examples/sprott.py>`
+   Yet another chaotic Sprott system on LUCIDAC, cf. 
+   `Analog Paradigm Application Note 43 <https://analogparadigm.com/downloads/alpaca_43.pdf>`_.
+   (Software simulation)
 
 Jupyter notebooks
 -----------------
