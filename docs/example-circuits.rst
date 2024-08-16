@@ -55,6 +55,10 @@ the lucipy repository.
    `Analog Paradigm Application Note 44 <https://analogparadigm.com/downloads/alpaca_44.pdf>`_.
    (Software simulation)
 
+:download:`A four wing attractor <../examples/four_wing_attractor.py>`
+   A four wing attractor on LUCIDAC.
+   (Software simulation)
+
 Jupyter notebooks
 -----------------
 
