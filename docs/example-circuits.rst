@@ -59,6 +59,10 @@ the lucipy repository.
    A four wing attractor on LUCIDAC.
    (Software simulation)
 
+:download:`The Halvorsen attractor <../examples/four_wing_attractor.py>`
+   The Halvorsen attractor on LUCIDAC.
+   (Software simulation)
+
 Jupyter notebooks
 -----------------
 
