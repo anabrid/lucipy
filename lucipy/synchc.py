@@ -47,6 +47,39 @@ def has_data(fh):
     return len(rlist) != 0
 
 
+class RemoteError(Exception):
+    """
+    A RemotError represents a returned error message by the endpoint.
+    Typically this means the LUCIDAC HybridController could not decode a message,
+    there is some typing or logic problem.
+    
+    The error message from the server always contains an integer error code and
+    a human readable string error message.
+    
+    In order to trace the error at the firmware side, both the code and string
+    can be helpful. You can grep the firwmare code with the string. For the code,
+    you have to understand how they are computed server side or consult the
+    firmware documentation.
+    """
+    def __init__(self, recv_envelope):
+        self.code = recv_envelope.code
+        self.type = recv_envelope.type
+        self.raw = recv_envelope
+        super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: '{recv_envelope.error}'")
+
+
+class LocalError(ValueError):
+    """
+    A LocalError represents a logic flaw at the client side, i.e. within the lucipy
+    code. It did not expect some message from the server or could not deserialize
+    messages received.
+    
+    Note that next to LocalErrors you can always receive things such as SocketError,
+    OSError or similiar low level connection problems (for instance: OSError "no route
+    to host")
+    """
+    pass
+
 class tcpsocket:
     "A socket with readline support"
     def __init__(self, host, port, auto_reconnect=True):
@@ -131,6 +164,7 @@ class serialsocket:
     def __repr__(self):
         return f"socket:/{self.device}"
 
+
 class jsonlines():
     "Middleware that speaks dictionaries at front and JSON at back"
     def __init__(self, actual_socket):
@@ -149,20 +183,14 @@ class jsonlines():
             print("haven't read anything, trying again")
             time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
-
         #print(f"jsonlines.read() got {read}")
-        return json.loads(read)
-        #except json.JSONDecodeError as s:
+        try:
+            return json.loads(read)
+        except json.JSONDecodeError as s:
+            raise LocalError(f"Could not decode as JSON: {s}. Received message ({len(read)} characters) is '{read}'")
     def read_all(self):
         while self.sock.has_data():
             yield self.read()
-
-class HybridControllerError(Exception):
-    def __init__(self, recv_envelope):
-        self.code = recv_envelope.code
-        self.type = recv_envelope.type
-        self.raw = recv_envelope
-        super().__init__(f"Remote error {recv_envelope.code} at query {recv_envelope.type}: '{recv_envelope.error}'")
 
 def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tcpsocket,serialsocket]:
     "Provides the appropriate socket for a given endpoint"
@@ -181,38 +209,66 @@ class Run:
     "Represents a running Run"
     run_states = "DONE ERROR IC NEW OP OP_END QUEUED TAKE_OFF TMP_HALT".split()
     
-    @staticmethod
-    def is_state(state:int, comparison:str):
-        return Run.run_states.index(comparison) == state
-    
     def __init__(self, hc):
         self.hc = hc
     
-    def data(self) -> typing.Iterator[typing.List[float]]:
+    def next_data(self) -> typing.Iterator[typing.List[float]]:
         """
-        "Slurp" all data aquisition from the run. Basically a "busy wait" or
-        "synchronous wait" until the run finishes.
-        data() returns once the run is stopped and yields data otherwise.
-        Therefore usage can be just like `list(hc.run().data())`
+        Reads next dataset from DAQ (data aquisiton) which is streamed during the run.
+        A call to this function yields a single dataset once arrived. It returns
+        when the run is finished and raises a LocalError if it doesn't properly
+        stop.
+    
+        The shape of data returned by this call is determined by the requested number
+        of DAQ channels, which is between 0 (= no data will be returned at all, not
+        even an empty directory per dataset) and 8 (= all channels). That is, the
+        following invariant holds:
+    
+        >>> lines = run.next_data()                                                    # doctest: +SKIP
+        >>> assert all(hc.daq_config["num_channels"] == len(line) for line in lines)   # doctest: +SKIP
+    
+        This invariant is also asserted within the method.
         """
         envelope = self.hc.sock.read()
         if envelope["type"] == "run_data":
             # TODO check for proper run id and entity.
-            msg_data = envelope["msg"]["data"];
+            msg_data = envelope["msg"]["data"]
+            assert all(self.hc.daq_config["num_channels"] == len(line) for line in msg_data)
             yield msg_data
         elif envelope["type"] == "run_state_change":
-            # should assert for line['old'] == state.
-            state = envelope["new"];
-            try:
-                if not (self.is_state(state, "DONE") or self.is_sate(state, "ERROR")):
-                    return
-            except ValueError:
-                print(f"Unknown state in {envelope}")
+            msg_old = envelope["msg"]["new"]
+            msg_new = envelope["msg"]["new"]
+            if msg_new == "DONE":
+                return # successfully transfered all data
+            if msg_new == "ERROR":
+                raise LocalError(f"Could not properly start the run. Most likely the DAQ ({self.hc.daq_config}) or RUN ({self.hc.run_config}) configuration not accepted by the server side.")
             # Attention: After runstate stop there still can come a last data
             #            package.
         else:
-            print(f"Run::slurp(): Unexpected message {envelope}")
-            return # stop slurping
+            raise LocalError(f"Run::slurp(): Unexpected message {envelope}")
+            #return # stop slurping
+
+    def data(self) -> typing.List[float]:
+        """
+        Returns all measurement data (evolution data on the ADCs) during a run.
+        
+        This is basically a synchronous wait until the run finishes.
+        
+        The shape of data returned by this call is basically
+        ``NUM_SAMPLING_POINTS x NUM_CHANNELS``. Since this is a uniform array, users
+        can easily use numpy to postprocess and extract what they are interested in.
+        Typically, you want to trace the evolution of particular channels, for instance
+        
+        >>> data = np.array(run.data())                      # doctest: +SKIP
+        >>> x, y, z = data[:,0], data[:,1], data[:,2]        # doctest: +SKIP
+        >>> plt.plot(x)                                      # doctest: +SKIP
+    
+        See also :meth:`next_data` and example application codes.
+        """
+        ret = []
+        for lines in self.next_data():
+            ret += lines
+        return ret
 
 class LUCIDAC:
     """
@@ -323,7 +379,7 @@ class LUCIDAC:
             # This is a serial socket replying first what was typed. Read another time.
             resp = dotdict(self.sock.read())
         if "error" in resp:
-            raise HybridControllerError(resp)
+            raise RemoteError(resp)
         if resp.type == envelope.type:
             # Do not show the empty message, in case of success.
             return resp.msg if resp.msg != {} else None
@@ -332,7 +388,19 @@ class LUCIDAC:
             return resp
     
     def slurp(self):
-        "Read all remaining stuff in the socket. Useful for broken run cleanup"
+        """
+        Flushes the input buffer in the socket.
+        
+        Returns all messages read as a list. This is useful when we lost the remote
+        state (wrongly tracked) and have to clean up.
+    
+        .. note::
+        
+           Calling this method should not be possible in regular usage. In particular, TCP
+           connections are normally "clean". In contrast, serial terminals are ephermal
+           from the Microcontrollers point of view, so it might be neccessary to flush
+           the connection in particular at beginning of a connection.
+        """
         return list(self.sock.read_all())
     
     def get_mac(self):
@@ -373,7 +441,7 @@ class LUCIDAC:
         #       evaluating what help() returns.
         try:
             return self.query("set_config", outer_config)
-        except HybridControllerError as e:
+        except RemoteError as e:
             if e.code == -10:
                 return self.query("set_circuit", outer_config)
             else:
@@ -444,7 +512,9 @@ class LUCIDAC:
         """
         :args dac: Digital analog converter outputs, as there are two a list with two floats (normalized [-1,+1]) is expected
         """
-        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": { "signal_generator":  { "dac_outputs": dac } } })
+        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": {
+            "signal_generator":  { "dac_outputs": dac, "sleep": False }
+        } })
     
     def set_op_time(self, *, ns=0, us=0, ms=0):
         """
@@ -466,6 +536,9 @@ class LUCIDAC:
         self.run_config.op_time = ns + us*1000 + ms*1000*1000
         return self.run_config.op_time
     
+    #: Sample rates per second accepted by the system.
+    allowed_sample_rates = [1, 2, 4, 5, 8, 10, 16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 625, 800, 1000, 1250, 1600, 2000, 2500, 3125, 4000, 5000, 6250, 8000, 10000, 12500, 15625, 20000, 25000, 31250, 40000, 50000, 62500, 100000, 125000, 200000, 250000, 500000, 1000000]
+    
     def set_daq(self, *,
             num_channels = 0,
             sample_op = True,
@@ -477,8 +550,8 @@ class LUCIDAC:
            0 (no data aquisition) and 8 (all channels)
         :param sample_op: Sample a first point exactly when optime starts
         :param sample_op_end: Sample a last point exactly when optime ends
-        :param sample_rate: Number of samples requested over the overall optime (TODO: check
-           if this descrption is correct)
+        :param sample_rate: Number of samples per second. Note that not all numbers are
+           supported. A client side check is performed.
         """
         if not (0 <= num_channels and num_channels < 8):
             raise ValueError("Require 0 <= num_channels < 8")
@@ -488,8 +561,12 @@ class LUCIDAC:
         self.daq_config.num_channels = num_channels
         self.daq_config.sample_op = sample_op
         self.daq_config.sample_op_end = sample_op_end
-        self.daq_config.sample_rate = sample_rate
         
+        if not sample_rate in self.allowed_sample_rates:
+            raise ValueError(f"{sample_rate=} not allowed. Only values allowed from the following list: {allowed_sample_rates}")
+        
+        self.daq_config.sample_rate = sample_rate
+       
         return self.daq_config
 
     def set_run(self, *,
@@ -530,9 +607,10 @@ class LUCIDAC:
             daq_config = self.daq_config
         )
         
+        self.slurp() # slurp old run data or similar
         ret = self.query("start_run", start_run_msg)
         if ret:
-            raise ValueError(f"Run did not start successfully. Expected answer to 'start_run' but got {ret=}")
+            raise LocalError(f"Run did not start successfully. Expected answer to 'start_run' but got {ret=}")
     
         return Run(self)
     
