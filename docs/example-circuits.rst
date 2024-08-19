@@ -67,6 +67,12 @@ the lucipy repository.
    The Dadras attractor on LUCIDAC.
    (Software simulation)
 
+:download:`The reduced Henon-Heiles attractor <../examples/rhh.py>`
+   The reduced Henon-Heiles attractor on LUCIDAC (cf. Julienn Clinton Sprott,
+   "Elegang Chaos - Algebraically Simple Chaotic Flows", World Scientific,
+   2016, pp. 133 f.
+   (Software simulation)
+
 Jupyter notebooks
 -----------------
 
