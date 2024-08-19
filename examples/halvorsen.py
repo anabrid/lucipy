@@ -16,9 +16,9 @@ a  = 1.89
 
 h  = Circuit()
 
-x  = h.int(ic = .1)
-y  = h.int()
-z  = h.int()
+x  = h.int(ic = 0.3)
+y  = h.int(ic = 0.1)
+z  = h.int(ic = 0.3)
 x2 = h.mul()
 y2 = h.mul()
 z2 = h.mul()
