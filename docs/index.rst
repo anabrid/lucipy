@@ -15,6 +15,7 @@ See :ref:`intro` for a beginning.
    intro
    installation
    pybrid
+   dev
 
 .. toctree::
    :maxdepth: 2

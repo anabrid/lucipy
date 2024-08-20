@@ -41,7 +41,7 @@ class Simulation:
       k0 slow results are thus divided by 100 in time.
       Should probably be done in another way so the simulation time is seconds.
     
-    :arg circuit: An :cls:`circuits.Circuit` object. We basically only need it
+    :arg circuit: An :class:`circuits.Circuit` object. We basically only need it
       in order to make use of the :meth:`~circuits.Circuit.to_dense_matrix` call.
     :arg realtime: If set, the simulation time unit will be ``1sec``. If not,
       ``k0=10.000`` equals time unit 1. That means, in this case time is measured
