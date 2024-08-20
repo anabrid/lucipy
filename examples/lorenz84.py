@@ -1,40 +1,48 @@
+#
+# Lorenz84 attractor, see Ulmann, "Analog and Hybrid Computer Programming", 
+# 2nd edition, pp. 149 ff.
+#
+
 from lucipy import Circuit, Simulation
 import matplotlib.pyplot as plt
 import numpy as np
 
 l = Circuit()
 
-x     = l.int(ic = 1)
+x     = l.int()
 y     = l.int()
 z     = l.int()
-xz   = l.mul()
-xy   = l.mul()
-yy   = l.mul()
-zz   = l.mul()
+xz    = l.mul()
+xy    = l.mul()
+y2    = l.mul()
+z2    = l.mul()
 const = l.const()
 
-l.connect(x, xz.a, weight = -1)             # xz
+l.connect(x, xz.a)
 l.connect(z, xz.b)
-l.connect(x, xy.a, weight = -1)             # xy
+
+l.connect(x, xy.a)
 l.connect(y, xy.b)
-l.connect(y, yy.a, weight = -1)             # y^2
-l.connect(y, yy.b)
-l.connect(z, zz.a, weight = -1)             # z^2
-l.connect(z, zz.b)
 
-l.connect(yy, x, weight = -4.5)             # x' = -y^2 - z^2 - ax + af
-l.connect(zz, x, weight = -4.5)
-l.connect(x, x, weight = -.25)
-l.connect(const, x, weight = 1)
+l.connect(y, y2.a)
+l.connect(y, y2.b)
 
-l.connect(xy, y, weight = 2)                # z' = xy - bxz - y + g # evtl -0.2?
-l.connect(xz, y, weight = -8)
-l.connect(y, y, weight = -1)
-l.connect(const, y, weight = 0.333)
+l.connect(z, z2.a)
+l.connect(z, z2.b)
 
-l.connect(xy, z, weight = 8)                # z' = bxy + xz - z
-l.connect(xz, z, weight = 2)
-l.connect(z, z, weight = -1)
+l.connect(y2, x, weight = 4.5)              # x' = -y^2 - z^2 - ax + af
+l.connect(z2, x, weight = 4.5)
+l.connect(x,  x, weight = .25)
+l.connect(const, x, weight = -1)
+
+l.connect(xy, y, weight = -2)               # z' = xy - bxz - y + g # evtl -0.2?
+l.connect(xz, y, weight = 8)
+l.connect(y, y, weight = 1)
+l.connect(const, y, weight = -0.333)
+
+l.connect(xy, z, weight = -8)               # z' = bxy + xz - z
+l.connect(xz, z, weight = -2)
+l.connect(z, z, weight = 1)
 
 sim     = Simulation(l)                     # Create simulation object
 t_final = 200
