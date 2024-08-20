@@ -19,8 +19,8 @@ import numpy as np
 
 rhh  = Circuit()
 
-dx  = rhh.int()
-dy  = rhh.int()
+mdx = rhh.int()
+mdy = rhh.int()
 x   = rhh.int(ic = 0.1)
 y   = rhh.int(ic = 0.1)
 y2  = rhh.mul()
@@ -36,14 +36,14 @@ rhh.connect(y, y2.b)
 rhh.connect(x, x2.a)            # x^2
 rhh.connect(x, x2.b)
 
-rhh.connect(xy, dx, weight = 10)
+rhh.connect(xy, mdx, weight = 10)
 
-rhh.connect(dx, x, weight = 0.1)
+rhh.connect(mdx, x, weight = 0.1)
 
-rhh.connect(x2, dy, weight = -10)
-rhh.connect(y2, dy, weight = 5.7)
+rhh.connect(x2, mdy, weight = -10)
+rhh.connect(y2, mdy, weight = 5.7)
 
-rhh.connect(dy, y, weight = 0.1)
+rhh.connect(mdy, y, weight = 0.1)
 
 # Run simulation
 sim     = Simulation(rhh)       # Create simulation object
@@ -56,8 +56,8 @@ result  = sim.solve_ivp(t_final,
                         t_eval = np.linspace(0, t_final, num = 1000000))
 
 # Get data from x- and y-integrator
-dx_out, dy_out, x_out, y_out = result.y[dx.id], result.y[dy.id], result.y[x.id], result.y[y.id]
+mdx_out, mdy_out, x_out, y_out = result.y[mdx.id], result.y[mdy.id], result.y[x.id], result.y[y.id]
 
-plt.plot(dx_out, dy_out)        # Create a phase space plot.
+plt.plot(mdx_out, mdy_out)      # Create a phase space plot.
 plt.show()                      # Display the plot.
 
