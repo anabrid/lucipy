@@ -1,233 +1,49 @@
-#!/usr/bin/env python3
+#
+# Roessler attractor on LUCIDAC:
+#
+# x' = -0.8y - 2.3z
+# y' = 1.25x + 0.2y
+# z' = 0.005 + 15z(x - 0.3796)
+#
 
-import sys, time
-from pprint import pprint
-sys.path.append("..") # use that lucipy in parent directory
+from lucipy import Circuit, Simulation
+import matplotlib.pyplot as plt
+import numpy as np
 
-from lucipy import LUCIDAC, Circuit, Route, Simulation
+r = Circuit()                           # Create a circuit
 
-ode = Circuit()
+x     = r.int(ic = .066)
+my    = r.int()
+mz    = r.int()
+prod  = r.mul()
+const = r.const()
 
-def roessler():
-    x = ode.int(id=0, ic=-0.0666)
-    y = ode.int(id=1, ic=0)
-    z = ode.int(id=2, ic=0)
-    
-    routes = [
-        Route(8,   0,   1.25, 9),
-        Route(9,   1,  -0.8,  8),
-        Route(10,  2, -2.3,   8),
-        Route(9,   3,  0.2,   9), # Int1->Int1 Lit: 0.2, hier war: 0.4
-        Route(4,   4, -0.005,10),
-        Route(8,   5,  1.0,   0),
-        Route(4,  14, -0.38,  0), # TODO Math/Simulation is correctly -0.38, REV0 requires +0.38 !?
-        Route(10, 15, 15.0,   1),
-        Route(0,  16, -1.0,  10),
-        
-        Route(8,  8,   0.0,  9),
-        Route(9,  9,   0.0,  9)
-    ]
-    return routes
+r.connect(my,    x, weight = -0.8)
+r.connect(mz,    x, weight = -2.3)
 
-# funktionsfaehig:
-sinus_von_pybrid = \
-    {'entity': None,
- 'config': {'/0': {'/M0': {'elements': [{'ic': 0.709971666, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000},
-     {'ic': 0, 'k': 10000}]},
-   '/M1': {},
-   '/U': {'outputs': [8,
-     9,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     8,
-     9,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None]},
-   '/C': {'elements': [1.00024426,
-     -1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426,
-     1.00024426]},
-   '/I': {'outputs': [None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     None,
-     [1],
-     [0],
-     None,
-     None,
-     None,
-     None,
-     None,
-     None]}}}}
+r.connect(x,     my, weight = 1.25)
+r.connect(my,    my, weight = -0.2)
 
+r.connect(const, mz, weight = 0.005)
+r.connect(prod,  mz, weight = 10)
+r.connect(prod,  mz, weight = 5)
 
+r.connect(mz,    prod.a, weight = -1)
+r.connect(x,     prod.b)
+r.connect(const, prod.b, weight = -0.3796)
 
-def sinus():
-    print("Sinus")
-    hc.query("reset")
-    #for i in range(8):
-    #    ode.set_ic(el=i, val= (i+1) / 10)
-    
-    ode.set_ic(0, 0.7)
-    
-    routes_klappt = [
-        Route(8, 0,  1.0, 9),
-        Route(9, 1, -1.0, 8),
-       # Route(8, 8,  0.0, 14),
-        Route(9, 9,  0.0, 15),
-    ]
-        
-    routes_falsch = [
-        Route(8, 8,  1.0, 9),
-        Route(9, 9, -1.0, 8)
-    ]
-    
-    routes_klappt_vielleicht = [
-        Route(8, 0,  1.0, 9),
-        Route(9, 1, -1.0, 8),
-        Route(8, 8,  1.0, 9),
-        Route(9, 9, -1.0, 8),
-    ]
-    
-    return routes_klappt_vielleicht
+sim     = Simulation(r)                 # Create simulation object
+t_final = 1000                          # This yields a ramp from -1 to +1
 
-def constant():
-    hc.query("reset")
-    for i in range(8):
-        ode.set_ic(el=i, val= (i+1) / 10)
-    return [ Route(12, lane, 0.0, 4) for lane in range(32) ]
+#  The integration scheme used has a significant impact on the correctness of 
+# the solution as does the interval between time steps.
+result  = sim.solve_ivp(t_final, 
+                        method = 'LSODA', 
+                        t_eval = np.linspace(0, t_final, num = 1000000))
 
+# Get data from x- and y-integrator
+x_out, my_out, mz_out = result.y[x.id], result.y[my.id], result.y[mz.id]
+plt.plot(x_out, my_out)                  # Create a phase space plot.
 
-def f_roessler(t, s):
-    x,y,z = s
-    A,B,C = 0.2, 0.005, 0.3796
-    X = -0.8*y - 2.3*z
-    Y = 1.25*x + A*y
-    Z = B + 15*z*(x-C)
-    return [X, Y, Z]
-   
+plt.show()                              # Display the plot.
 
-ode.add(roessler())
-
-if True:
-
-    from scipy.integrate import solve_ivp
-    from pylab import *
-    ion()
-
-    sim = Simulation(ode)
-    t_final=50
-    #ics = [0.5, 0.1, 0]
-    ics = sim.ics[0:3]
-    interest = ["x", "y", "z"]
-
-    res_luci = sim.solve_ivp(t_final, ics=ics, dense_output=True)
-    res_py   = solve_ivp(f_roessler, t_span=[0, t_final], y0=ics, method="LSODA", dense_output=True)
-    
-    data_luci = res_luci.sol(linspace(0,t_final,300))
-    data_py =   res_py.sol(linspace(0,t_final,300))
-    
-    if False:
-        data = data_py
-        for i, label in enumerate(interest):
-            plot(data[i], label=label)
-        legend()
-    else:
-        subplot(2,1,1)
-        for i,label in enumerate(interest):
-            p = plot(data_py[i], label=f"{label} (Python)")
-            plot(data_luci[i], "--", label=f"{label} (lucisim)", color=p[0].get_color(), alpha=0.7)
-        legend()
-
-        subplot(2,1,2)
-        dydt = lambda F, res: np.array([F(t,y) for t,y in zip(res.t, res.y.T)]).T
-
-        dyluci = dydt(sim.rhs, res_luci)
-        dypy = dydt(f_roessler, res_py)
-
-        for i,label in enumerate(interest):
-            p = plot(res_py.t, dypy[i], label=f"{label} (Python)")
-            plot(res_luci.t, dyluci[i], "--", label=f"{label} (lucisim)", color=p[0].get_color(), alpha=0.7)
-        legend()
-
-if False:
-    hc = LUCIDAC("tcp://192.168.150.127") # Frankfurt
-    #hc = LUCIDAC("tcp://192.168.102.230") # ulm
-    
-    config = ode.generate()
-    pprint(config)
-    hc.set_config(config)
-
-
-    manual_control = True
-    if manual_control:
-        hc.query("manual_mode", dict(to="ic"))
-        time.sleep(1)
-        hc.query("manual_mode", dict(to="op"))
-        time.sleep(20)
-        hc.query("manual_mode", dict(to="halt"))
-    else:
-        hc.set_op_time(ms=900)
-        hc.start_run()
