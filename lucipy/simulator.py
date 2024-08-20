@@ -101,7 +101,7 @@ class Simulation:
         constants = np.ones((4,)) # constant sources on Mblock
         
         # Compute the actual MMulBlock, computing 4 multipliers and giving out constants.
-        mult_sign = -1 # in LUCIDACs, multipliers negate!
+        mult_sign = +1 # in LUCIDACs REV1, multipliers do *no more* negate!
         Mout_from = lambda Min: np.concatenate((mult_sign*np.prod(Min.reshape(4,2),axis=1), constants))
         
         Mout = Mout_from(Min0)
@@ -167,7 +167,7 @@ class Simulation:
             pass
         else:
             Iin += self.D.dot(Iout)
-        int_sign  = +1 # in LUCIDAC, integrators do not negate
+        int_sign  = -1 # in LUCIDAC REV1, integrators *do* negate
         #print(f"{Iout[0:2]=} -> {Iin[0:2]=}")
         #print(t)
         return int_sign * Iin * self.int_factor
