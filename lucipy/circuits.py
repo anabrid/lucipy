@@ -624,6 +624,13 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         return el
     
     def use_constant(self, use_constant=True):
+        """
+        Useful values for the constant:
+    
+        * ``True`` or ``1.0`` or ``1``: Makes a constant ``+1``
+        * ``0.1`` makes such a constant
+        * ``False`` or ``None`` removes the overall constant
+        """
         self.u_constant = use_constant
     
     def load(self, config_message):
@@ -675,8 +682,9 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         # update with Carrier configuration
         cluster_config.update(Probes.generate(self).items())
         
-        if self.u_constant:
-            cluster_config["/U"]["constant"] = True
+        # send constant configuration regardless of it's value, because
+        # False and None are also valid.
+        cluster_config["/U"]["constant"] = self.u_constant
             
         return cluster_config 
         
