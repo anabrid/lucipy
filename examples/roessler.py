@@ -33,7 +33,7 @@ r.connect(x,     prod.b)
 r.connect(const, prod.b, weight = -0.3796)
 
 sim     = Simulation(r)                 # Create simulation object
-t_final = 1000                          # This yields a ramp from -1 to +1
+t_final = 1000
 
 #  The integration scheme used has a significant impact on the correctness of 
 # the solution as does the interval between time steps.
