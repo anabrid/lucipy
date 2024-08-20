@@ -59,8 +59,18 @@ the lucipy repository.
    A four wing attractor on LUCIDAC.
    (Software simulation)
 
-:download:`The Halvorsen attractor <../examples/four_wing_attractor.py>`
+:download:`The Halvorsen attractor <../examples/halvorsen.py>`
    The Halvorsen attractor on LUCIDAC.
+   (Software simulation)
+
+:download:`The Dadras attractor <../examples/dadras.py>`
+   The Dadras attractor on LUCIDAC.
+   (Software simulation)
+
+:download:`The reduced Henon-Heiles attractor <../examples/rhh.py>`
+   The reduced Henon-Heiles attractor on LUCIDAC (cf. Julienn Clinton Sprott,
+   "Elegang Chaos - Algebraically Simple Chaotic Flows", World Scientific,
+   2016, pp. 133 f.
    (Software simulation)
 
 Jupyter notebooks
