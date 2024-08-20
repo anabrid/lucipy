@@ -14,32 +14,32 @@ import numpy as np
 
 d  = Circuit()
 
-x  = d.int(ic = 0.06)
-y  = d.int(ic = 0.1)
-z  = d.int(ic = -0.1)
+mx  = d.int(ic = 0.06)
+my  = d.int(ic = 0.1)
+mz  = d.int(ic = -0.1)
 yz = d.mul()
 xz = d.mul()
 xy = d.mul()
 
-d.connect(y,  x, weight = 0.1)
-d.connect(x,  x, weight = -0.3)
-d.connect(yz, x, weight = 5.4)
+d.connect(my, yz.a)
+d.connect(mz, yz.b)
 
-d.connect(y,  y, weight = 0.17)
-d.connect(xz, y, weight = -2)
-d.connect(z,  y)
+d.connect(mx, xz.a)
+d.connect(mz, xz.b)
 
-d.connect(xy, z, weight = 4)
-d.connect(z,  z, weight = -0.9)
+d.connect(mx, xy.a)
+d.connect(my, xy.b)
 
-d.connect(y, yz.a)
-d.connect(z, yz.b)
+d.connect(my, mx, weight = -0.1)
+d.connect(mx, mx, weight = 0.3)
+d.connect(yz, mx, weight = 5.4)
 
-d.connect(x, xz.a)
-d.connect(z, xz.b)
+d.connect(my, my, weight = -0.17)
+d.connect(xz, my, weight = -2)
+d.connect(mz, my, weight = -1)
 
-d.connect(x, xy.a)
-d.connect(y, xy.b)
+d.connect(xy, mz, weight = 4)
+d.connect(mz, mz, weight = 0.9)
 
 # Run simulation
 sim     = Simulation(d)             # Create simulation object
@@ -52,8 +52,8 @@ result  = sim.solve_ivp(t_final,
                         t_eval = np.linspace(0, t_final, num = 1000000))
 
 # Get data from x- and y-integrator
-x_out, y_out, z_out = result.y[x.id], result.y[y.id], result.y[z.id]
+mx_out, my_out, mz_out = result.y[mx.id], result.y[my.id], result.y[mz.id]
 
-plt.plot(y_out, z_out)              # Create a phase space plot.
+plt.plot(my_out, mz_out)            # Create a phase space plot.
 plt.show()                          # Display the plot.
 
