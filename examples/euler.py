@@ -4,18 +4,18 @@ import numpy as np
 
 e = Circuit()                           # Create a circuit
 
-ramp  = e.int(ic = -1)                  # Integrator for a time linear ramp
+ramp  = e.int(ic = 1)                   # Integrator for a time linear ramp
 const = e.const()                       # Constant for the time linear ramp
 
 scm0  = e.mul()                         # These two multipliers and two
 scm1  = e.mul()                         # integrators generate a sine/cosine
-sci0  = e.int(ic = -1)                  # with time varying frequency (see 
+sci0  = e.int(ic = 1)                   # with time varying frequency (see 
 sci1  = e.int()                         # below).
 
-x     = e.int(ic = -0.75)               # Integrators for x and
-y     = e.int(ic = -0.75)               # y component of the spiral
+x     = e.int(ic = 0.65)                # Integrators for x and
+y     = e.int(ic = 0.65)                # y component of the spiral
 
-e.connect(const, ramp, weight = 0.1)    # Integrate over a constant
+e.connect(const, ramp, weight = -0.1)   # Integrate over a constant
 
 e.connect(ramp, scm0.a)                 # Generate a sine/cosine pair
 e.connect(ramp, scm1.a)                 # with varying frequency
@@ -38,7 +38,7 @@ result  = sim.solve_ivp(t_final,
 
 # Get data from x- and y-integrator
 x_out, y_out = result.y[x.id], result.y[y.id]
-
 plt.plot(y_out, x_out)                  # Create a phase space plot.
+
 plt.show()                              # Display the plot.
 
