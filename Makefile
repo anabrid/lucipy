@@ -15,9 +15,9 @@ doctest:
 	$(PYTEST) --doctest-modules --pyargs lucipy -v
 
 unittests: # integration/acceptance tests
-	$(PYTEST) -v
+	$(PYTEST) -v test/
 
 test:
-	$(MAKE) doctest #unittests
+	$(MAKE) doctest unittests
 	
-.PHONY = dist docs
+.PHONY: dist docs test doctest unittests

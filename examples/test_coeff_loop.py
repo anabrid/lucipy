@@ -23,11 +23,11 @@ def test_coeff(ode, coeff):
 
 # connect to osci
 #lucidac_ip = "192.168.150.127"
-lucidac_ip = "192.168.100.143"
+#lucidac_ip = "192.168.100.143"
 # osci_ip = "192.168.150.136"
 
 # connect to LUCIDAC and prep data
-hc = LUCIDAC("tcp://" + lucidac_ip)
+hc = LUCIDAC()#"tcp://" + lucidac_ip)
 
 
 def rep():
@@ -53,23 +53,6 @@ for coeff in range(1,32):
 
   hc.set_config(config)
   hc.set_op_time(ms=1000)
-
-  """
-    with PYDHO800(address = osci_ip) as dho:
-      print(f"Identify: {dho.identify()}")
-
-      dho.set_channel_enable(0, True)
-      dho.set_channel_enable(1, True)
-      dho.set_channel_enable(2, False)
-      dho.set_channel_enable(3, False)
-
-      dho.set_channel_scale(0, 5.0)
-      dho.set_channel_scale(1, 5.0)
-      dho.set_timebase_scale(1e-2)
-
-      tx_depth = dho.memory_depth_t.M_10M
-      dho.set_memory_depth(tx_depth)
-  """
 
   hc.query("manual_mode", dict(to="ic"))
 #  dho.set_run_mode(OscilloscopeRunMode.RUN)

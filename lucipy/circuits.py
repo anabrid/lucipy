@@ -17,7 +17,7 @@ ExtIn/ADC/etc. But it makes it very simple and transparent to work with routes
 and setup the circuit configuration low level.
 """
 
-import functools, operator, textwrap, pprint, itertools
+import functools, operator, textwrap, pprint, itertools, random
 from collections import namedtuple
 from typing import get_args, List, Dict, Union, Optional
 
@@ -222,6 +222,11 @@ class MIntBlock:
         self.ics = [0.0]*DefaultLUCIDAC.num_int
         self.k0s = [self.fast]*DefaultLUCIDAC.num_int
         
+    def randomize(self):
+        for i in range(DefaultLUCIDAC.num_int):
+            self.ics[i] = random.uniform(-1.0, +1.0)
+            self.k0s[i] = random.choice([self.slow, self.fast])
+
     def set_ic(self, el:Union[Int,int], val:float):
         el = el.id if isinstance(el, Int) else el
         self.ics[el] = val
@@ -234,6 +239,13 @@ class MIntBlock:
         return {
             "elements": [dict(k=k, ic=ic) for k,ic in zip(self.k0s, self.ics)]
         }
+
+    def load(self, config):
+        for idx, integrator in enumerate(config["elements"]):
+            if "k" in integrator:
+                self.k0s[i] = integrator["k"]
+            if "ic" in integrator:
+                self.ics[i] = integrator["ics"]
     
     def to_pybrid_cli(self):
         """
@@ -243,6 +255,10 @@ class MIntBlock:
         ret += [f"set-element-config carrier/0/M0/{i} ic {val}" for i,val in enumerate(self.ics) if val != 0]
         ret += [f"set-element-config carrier/0/M0/{i} k {val}" for i,val in enumerate(self.ics) if self.k0s != self.fast]
         return "\n".join(ret)
+
+#: Just a tuple collecting U, C, I matrices without determining their actual representation.
+#: The representation could be lists, numpy arrays, etc. depending on the use.
+UCI = namedtuple("UCI", ["U", "C", "I"])
 
 class Routing:
     """
@@ -264,6 +280,25 @@ class Routing:
     def __init__(self, routes: List[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = routes if routes else []
+    
+    def randomize(self, num_lanes=32, max_coeff=+10, seed=None):
+        """
+        Appends random routes.
+    
+        :arg num_lanes: How many lanes to fill up. By default fills up all lanes.
+        :arg max_coeff: Maximal coefficient magnitudes. ``+1`` or ``+10`` are
+             useful values for LUCIDAC.
+        :arg seed: For reproducability (as in unit tests), this calls ``random.seed``.
+             A large integer may be a suitable argument.
+        :returns: The instance, i.e. is chainable.
+        """
+        if seed:
+            random.seed(seed)
+        for lane in range(num_lanes):
+            uin, iout = random.randrange(16), random.randrange(16)
+            coeff = random.uniform(-abs(max_coeff), +abs(max_coeff))
+            self.add( Route(uin, lane, coeff, iout) )
+        return self
     
     def next_free_lane(self):
         route_for_lane = [ find(lambda r: r.lane == lane, None, self.routes) for lane in self.available_lanes() ]
@@ -293,7 +328,7 @@ class Routing:
     def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
         return self.add(Connection(source,target,weight))
     
-    def routes2input(self):
+    def routes2input(self) -> UCI:
         """
         Converts the list of routes to an *input matrix representation*. In this format,
         the U/C/I matrix are each represented as a list of 32 numbers.
@@ -309,10 +344,10 @@ class Routing:
            this information.
     
         """
-        return dict(
-            u=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
-            i=clean([r.iout for r in self.routes if r.lane == lane] for lane in range(32)),
-            c=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
+        return UCI(
+            U=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
+            I=clean([r.iout for r in self.routes if r.lane == lane] for lane in range(32)),
+            C=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
     
     @staticmethod
@@ -329,30 +364,49 @@ class Routing:
         return output if keep_arrays else clean(output)
     
     @staticmethod
+    def output2input(outmat):
+        "Maps Array<Array<int>|int,16> onto Array<int,32>"
+        input = [ None for _ in range(32) ]
+        for clane, lanes in enumerate(outmat):
+            if lanes:
+                for lane in lanes:
+                    input[clane] = clane
+        return input
+    
+    @staticmethod
     def coeff_upscale(c_elements):
         upscaling = [ (v < -1 or v > 1) for v in c_elements ]
         scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
         return upscaling, scaled_c
-        
 
     def generate(self):
         """
         Generate the configuration data structure required by the protocol, which is
         that "output-centric configuration".
         """
-        mat = self.routes2input()
-        upscaling, scaled_c = self.coeff_upscale(mat["c"])
+        U,C,I = self.routes2input()
+        upscaling, scaled_c = self.coeff_upscale(C)
         return {
-            "/U": dict(outputs = mat["u"]),
+            "/U": dict(outputs = U),
             "/C": dict(elements = scaled_c),
-            "/I": dict(outputs = self.input2output(mat["i"]), upscaling = upscaling)
+            "/I": dict(outputs = self.input2output(I), upscaling = upscaling)
         }
         # TODO: Ublock Altsignals, where in REV1?
         # ret["/U"]["alt_signals"] = [False]*8
+        
+    def load(self, config):
+        # load all in output centric format
+        U = config["/U"] if "/U" in config else [ None ]*32
+        C = config["/C"] if "/C" in config else [ 0.0  ]*32
+        I = config["/I"] if "/I" in config else [ None ]*16
+        I = self.output2input(I)
+        
+        for lane,(u,c,i) in enumerate(zip(U,C,I)):
+            self.add(Route(u,lane,c,i))
     
     def to_pybrid_cli(self):
         """
-        Generate the Pybrid-CLI commands as string out of this Route representation
+        Generate the Pybrid-CLI commands as string out of this Route representation.
         """
         return "\n".join(f"route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
     
@@ -366,6 +420,38 @@ class Routing:
         for (uin, _lane, coeff, iout) in self.routes:
             UCI[iout,uin] += coeff
         return UCI
+    
+    def to_dense_matrices(self, ui_dtype=bool) -> UCI:
+        """
+        Generates the three matrices U, C, I as dense numpy matrices.
+        
+        :arg ui_dtype: Data type for the U and I matrix. Naturally, this are
+          bitmatrices, so the default ``bool`` is a suitable choise. If you
+          prefer to look at numbers, say ``int`` or ``float`` instead.
+          Do not worry, numpy otherwise does the same arithmetics with booleans
+          as with integers.
+        :returns: 3-Tuple of numpy matrices for U, C, I, in this order.
+        
+        Note that one way to reproduce :meth:`to_dense_matrix` is just by
+        computing ``I.dot(C.dot(U))`` on the output of this function.
+        
+        >>> import numpy as np
+        >>> c = Circuit().randomize()
+        >>> U, C, I = c.to_dense_matrices()
+        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix())
+        True
+        """
+        import numpy as np
+        U = np.zeros((32,16), dtype=ui_dtype)
+        C = np.zeros((32,32))
+        I = np.zeros((16,32), dtype=ui_dtype)
+        
+        for (uin, lane, coeff, iout) in self.routes:
+            U[lane, uin]  = 1
+            C[lane, lane] = coeff
+            I[iout, lane] = 1
+        
+        return UCI(U,C,I)
 
     def to_sympy(self, int_names=None, subst_mul=False, no_func_t=False):
         """
@@ -387,6 +473,10 @@ class Routing:
            the MIntBlock settings, in particular not the k0. You have to apply different
            k0 values by yourself if neccessary! This can be as easy as to multiply the
            equations rhs with the appropriate k0 factor.
+        
+        Further limitations:
+        
+        * Will just ignore ACL_IN (Front panel in/out)
         
         Example for making use of the output within a scipy solver:
         
@@ -486,9 +576,35 @@ class Routing:
                          
         return ",\n".join(map(route2connection, self.routes))
         
+class Probes:
+    """
+    Models the LUCIDAC Carrier ADC channels and Front Panel inputs (ACL_select).
+    """
+    
+    def __init__(self, acl_select=None, adc_channels=None, **kwargs):
+        super().__init__(**kwargs)  # forwards all unused arguments
+        self.acl_select = acl_select if acl_select else []
+        self.adc_channels = adc_channels if adc_channels else []
+        
+    def set_acl_select(self, acl_select):
+        self.acl_select = acl_select
+        
+    def set_adc_channels(self, adc_channels):
+        self.adc_channels = adc_channels
+        
+    def generate(self):
+        ret = {}
+        if self.acl_select:
+            #if not all(isinstance(v, bool) for v in self.acl_select):
+            #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
+            ret["acl_select"] = self.acl_select
+        if self.adc_channels:
+            if not all(isinstance(v, int) for v in self.adc_channels):
+                raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
+            ret["adc_channels"] = self.adc_channels
+        return ret
 
-
-class Circuit(Reservoir, MIntBlock, Routing):
+class Circuit(Reservoir, MIntBlock, Routing, Probes):
     """
     A one stop-shop of a compiler! This class collects all independent behaviour in a neat
     single-class interface. This allows it, for instance, to provide an improved version of
@@ -498,6 +614,7 @@ class Circuit(Reservoir, MIntBlock, Routing):
     
     def __init__(self, routes: List[Route] = []):
         super().__init__(routes=routes)
+        self.u_constant = False
     
     def int(self, *, id=None, ic=0, slow=False):
         "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
@@ -505,6 +622,38 @@ class Circuit(Reservoir, MIntBlock, Routing):
         self.set_ic(el, ic)
         self.set_k0(el, MIntBlock.slow if slow else MIntBlock.fast)
         return el
+    
+    def use_constant(self, use_constant=True):
+        self.u_constant = use_constant
+    
+    def load(self, config_message):
+        """
+        Loads the configuration which :meth:`generate` spills out. The full circle.
+        """
+        config = config_message["config"] if "config" in config_message else config_message
+        config = config["/0"] if "/0" in config else config
+        
+        if "/M0" in config:
+            MIntBlock.load(config["/M0"])
+        
+        Routing.load(config)
+        # Probes.load(config)
+    
+    def randomize(self, num_lanes=32, max_coeff=+10, seed=None):
+        """
+        Add random configurations. This function is basically only for
+        testing. See :meth:`Routing.randomize` for the paramters.
+    
+        :arg num_lanes: How many lanes to fill up. By default fills up all lanes.
+        :arg max_coeff: Maximal coefficient magnitudes. ``+1`` or ``+10`` are
+             useful values for LUCIDAC.
+        :arg seed: For reproducability (as in unit tests), this calls ``random.seed``.
+             A large integer may be a suitable argument.
+        :returns: The instance, i.e. is chainable.
+        """
+        MIntBlock.randomize(self)
+        Routing.randomize(self, num_lanes, max_coeff, seed)
+        return self
     
     def generate(self):
         """
@@ -522,23 +671,15 @@ class Circuit(Reservoir, MIntBlock, Routing):
         cluster_config = Routing.generate(self)
         cluster_config["/M0"] = MIntBlock.generate(self) 
         cluster_config["/M1"] = {} # MMulBlock
+        
+        # update with Carrier configuration
+        cluster_config.update(Probes.generate(self).items())
+        
+        if self.u_constant:
+            cluster_config["/U"]["constant"] = True
+            
         return cluster_config 
-    
-        config = {
-            "/0": {
-                "/M0": MIntBlock.generate(self) ,
-                "/M1": {},
-            }
-        }
-        # update with U, C, I
-        config["/0"] = {**config["/0"], **Routing.generate(self)}
-
-        # return full message for set_circuit query.
-        return {
-            "entity": None,
-            "config": config
-        }
-    
+        
     def write(self, hc):
         hc.set_circuit(self.generate())
         
