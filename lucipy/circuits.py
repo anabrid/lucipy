@@ -38,7 +38,7 @@ def window(seq, n=2):
         yield result
 
 
-def next_free(occupied: List[bool], append_to:int=None) -> Optional[int]:
+def next_free(occupied: List[bool], criterion=None, append_to:int=None) -> Optional[int]:
     """
     Looks for the first False value within a list of truth values.
 
@@ -50,9 +50,12 @@ def next_free(occupied: List[bool], append_to:int=None) -> Optional[int]:
     >>> next_free([True]*4, append_to=3) # None, nothing free
     >>> next_free([True]*4, append_to=6)
     4
+
+    :arg criterion: Callback which gets the potential value and can decide whether this
+      value is fine. Can be used for constraining an acceptable next free lane.
     """
     for idx, val in enumerate(occupied):
-        if not val:
+        if not val and (criterion(val) if criterion else True):
             return idx
     return len(occupied) if append_to != None and len(occupied) < append_to else None
 
@@ -60,24 +63,36 @@ def next_free(occupied: List[bool], append_to:int=None) -> Optional[int]:
 
 Int = namedtuple("Int", ["id", "out", "a"])
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])
+Id  = namedtuple("Id",  ["id", "out", "a"])
 Const = namedtuple("Const", ["id", "out" ])
 Ele = Union[Int,Mul,Const]
 
 
 class DefaultLUCIDAC:
+    """
+    This describes a default LUCIDAC REV1 setup with
+    - M0 = MIntBlock (8 integrators)
+    - M1 = MMulBlock (4 multipliers and ID-lanes)
+    
+    In particular, note that the clanes of M0 and M1 have switched during the
+    transition from REV0 to REV1 hardware.
+    """
+    
     num_int = 8
     num_mul = 4
-    num_const = 4 # REV0 has constant givers
+    num_const = 2 # REV1 has constant givers in U block, this is purely "virtual" here
+    num_id  = 4 # REV1 identity elements in MMul block
     
-    MMulOffset = 0 # M1 block
-    MIntOffset = num_mul + num_const # == 8 # M0 block
+    MIntOffset = 0       # M0 block
+    MMulOffset = num_int # M1 block
 
     @staticmethod
     def reservoir(default_value=False):
         return {
-            Int: [default_value]*DefaultLUCIDAC.num_int,
-            Mul: [default_value]*DefaultLUCIDAC.num_mul,
+            Int:   [default_value]*DefaultLUCIDAC.num_int,
+            Mul:   [default_value]*DefaultLUCIDAC.num_mul,
             Const: [default_value]*DefaultLUCIDAC.num_const,
+            Id:    [default_value]*DefaultLUCIDAC.num_id,
         }
     
     @classmethod
@@ -97,9 +112,15 @@ class DefaultLUCIDAC:
                 cls.MMulOffset + idx,
                 cls.MMulOffset + 2*idx,
                 cls.MMulOffset + 2*idx+1)
+        if t == Id:
+            # identity elements on Mul-Block map the first 4 MMul inputs o the last 4 MMul outputs
+            # TODO: Check whether this is true in real hardware.
+            return Id(idx, cls.MMulOffset+4, cls.MMulOffset)
         if t == Const:
-            # REV0 constants at MMul block
-            return Const(idx, cls.MMulOffset + idx + cls.num_mul)
+            # Convention for REV1 constants:
+            # const(idx=0) => taken from clane 14 => has to be used in lanes  0..15
+            # conts(idx=1) => taken from clane 15 => has to be used in lanes 16..31
+            return Const(idx, 14 + idx)
         
     @staticmethod
     def populated():
@@ -110,12 +131,13 @@ class DefaultLUCIDAC:
     @classmethod
     def resolve_mout(cls, idx, reservoir):
         """
-        Simplistic way to map mul block outputs to a reservoir
+        Simplistic way to map mul block outputs to a reservoir.
+        This is sensitive on M0 and M1 block positions.
         """
         if idx < 0:  raise ValueError(f"0 < {idx=} < 16 too small")
-        if idx < 4:  return reservoir[Mul][idx]
-        if idx < 8:  return reservoir[Const][idx - cls.num_mul]
-        if idx < 16: return reservoir[Int][idx - cls.MIntOffset]
+        if idx < 8:  return reservoir[Int][idx]
+        if idx < 12: return reservoir[Mul][idx - cls.MMulOffset]
+        if idx < 16: return reservoir[Id][idx - 12]
         else:        raise ValueError(f"0 < {idx=} < 16 too large")
 
 class Reservoir:
@@ -141,11 +163,11 @@ class Reservoir:
         
         >>> r = Reservoir()
         >>> r.alloc(Int,1)
-        Int(id=1, out=9, a=9)
+        Int(id=1, out=1, a=1)
         >>> r.alloc(Int)
-        Int(id=0, out=8, a=8)
+        Int(id=0, out=0, a=0)
         >>> r.alloc(Int)
-        Int(id=2, out=10, a=10)
+        Int(id=2, out=2, a=2)
         """
         try:
             lst = self.allocated[t]
@@ -175,6 +197,9 @@ class Reservoir:
         return self.alloc(Mul, id)
     
     def const(self, id=None):
+        # use_constant is a method of the Routing and Circuit classes
+        if hasattr(self, "use_constant"):
+            self.use_constant()
         return self.alloc(Const, id)
     
     # some more fun
@@ -280,6 +305,7 @@ class Routing:
     def __init__(self, routes: List[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = routes if routes else []
+        self.u_constant = False
     
     def randomize(self, num_lanes=32, max_coeff=+10, seed=None):
         """
@@ -299,29 +325,66 @@ class Routing:
             coeff = random.uniform(-abs(max_coeff), +abs(max_coeff))
             self.add( Route(uin, lane, coeff, iout) )
         return self
+
     
-    def next_free_lane(self):
+    def use_constant(self, use_constant=True):
+        """
+        Useful values for the constant:
+    
+        * ``True`` or ``1.0`` or ``1``: Makes a constant ``+1``
+        * ``0.1`` makes such a constant
+        * ``False`` or ``None`` removes the overall constant
+        
+        The constant usage is actually a property of the U block
+        """
+        self.u_constant = use_constant
+    
+    def next_free_lane(self, constraint=None):
         route_for_lane = [ find(lambda r: r.lane == lane, None, self.routes) for lane in self.available_lanes() ]
         is_lane_occupied = [ True if x else False for x in route_for_lane ]
         #print("next_free_lane", self.available_lanes())
         #print("next_free_lane", is_lane_occupied)
         #occupied_lanes = [ r.lane for r in self.routes ]
-        idx = next_free(is_lane_occupied)#, append_to=self.max_lanes)
+        idx = next_free(is_lane_occupied, criterion=constraint)#, append_to=self.max_lanes)
         #print("next_free_lane = ",idx)
         if idx == None:
-            raise ValueError(f"All {self.available_lanes()} available lanes occupied, no more connections possible.")
+            raise ValueError(f"All {self.available_lanes()} available lanes occupied, no more connections possible." +\
+                             ("" if not constraint else " But note that custom constraints were applied!"))
         return self.available_lanes()[idx]
     
     def add(self, route_or_list_of_routes:Union[Route,List[Route]]):
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
-        route = route_or_list_of_routes
-        if route.lane == None:
-            physical = Route(route.uin, self.next_free_lane(), route.coeff, route.iout)
-        else:
-            if route.lane in [ r.lane for r in self.routes ]:
-                raise ValueError("Cannot append {route} because this lane is already occupied.")
-            physical = route
+        route = route_or_list_of_routes # probably unrouted route
+        physical = None                 # certainly routed route
+        
+        if self.u_constant:
+            if isinstance(route.uin, Const):
+                if route.lane is None:
+                    if route.uin.out == 14:
+                        lane = self.next_free_lane(lambda potential_lane: 15 < potential_lane)
+                    elif route.uin.out == 15:
+                        lane = self.next_free_lane(lambda potential_lane: potential_lane < 15)
+                    else:
+                        raise ValueError(f"Unacceptable Constant clane requested in unrouted {route}")
+                    physical = Route(route.uin, lane, route.coeff, route.iout)
+                else:
+                    if route.uin.out == 14 and route.lane < 16:
+                        raise ValueError(f"No Constant available at {route}, lane must be >15")
+                    if route.uin.out == 15 and route.lane > 15:
+                        raise ValueError(f"No Constraint available at {route}, lane must be ...")
+                    physical = route
+            else:
+                # probably need som sanity checks or similiar
+                pass
+            
+        if not physical:
+            if route.lane is None:
+                physical = Route(route.uin, self.next_free_lane(), route.coeff, route.iout)
+            else:
+                if route.lane in [ r.lane for r in self.routes ]:
+                    raise ValueError("Cannot append {route} because this lane is already occupied.")
+                physical = route
         self.routes.append(physical)
         return physical
 
@@ -379,11 +442,53 @@ class Routing:
         scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
         return upscaling, scaled_c
 
+    def sanity_check(self, also_print=True):
+        """
+        Checks for computing elements with more then one input whether either no input or
+        all are used.
+        """
+        multipliers_used = [False]*DefaultLUCIDAC.num_mul
+        multipliers = [ DefaultLUCIDAC.make(Mul, i) for i in range(DefaultLUCIDAC.num_mul) ]
+
+        # first determine which ones have either inputs or outputs connected
+        for route in self.routes:
+            for m in multipliers:
+                if route.uin == m.out or route.iout == m.a or route.iout == m.b:
+                    multipliers_used[m.id] = True
+                    
+        def has_connection(test):
+            connected = False
+            for route in self.routes:
+                if test(route):
+                    connected = True
+            return connected
+        
+        # then determine if all ports are connected
+        warnings = []
+        for i,(used, m) in enumerate(zip(multipliers_used, multipliers)):
+            if used:
+                if not has_connection(lambda route: route.uin == m.out):
+                    warnings.append(f"Multiplier {i} has input but output is not used.")
+                if not has_connection(lambda route: route.iout == m.a):
+                    warnings.append(f"Warning: Multiplier {i} is in use but connection A is empty")
+                if not has_connection(lambda route: route.iout == m.b):
+                    warnings.append(f"Warning: Multiplier {i} is in use but connection B is empty")
+
+        # TODO should use logging instead
+        if also_print:
+            for warning in warnings:
+                print(f"Sanity check warning: {warning}")
+
+        return warnings
+
     def generate(self):
         """
         Generate the configuration data structure required by the protocol, which is
         that "output-centric configuration".
         """
+        
+        self.sanity_check()
+        
         U,C,I = self.routes2input()
         upscaling, scaled_c = self.coeff_upscale(C)
         return {
@@ -408,6 +513,7 @@ class Routing:
         """
         Generate the Pybrid-CLI commands as string out of this Route representation.
         """
+        self.sanity_check()
         return "\n".join(f"route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
     
     def to_dense_matrix(self):
@@ -416,6 +522,7 @@ class Routing:
         bounded values [-20,20] where at most 32 entries are non-zero.
         """
         import numpy as np
+        self.sanity_check()
         UCI = np.zeros((16,16))
         for (uin, _lane, coeff, iout) in self.routes:
             UCI[iout,uin] += coeff
@@ -441,6 +548,7 @@ class Routing:
         >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix())
         True
         """
+        self.sanity_check()
         import numpy as np
         U = np.zeros((32,16), dtype=ui_dtype)
         C = np.zeros((32,32))
@@ -495,7 +603,7 @@ class Routing:
             sol = solve_ivp(f, (0, 10), [1,2,3])
         
         """
-        
+        self.sanity_check()
         from sympy import symbols, Symbol, Function, Derivative, Eq
         
         t = symbols("t")
@@ -539,6 +647,7 @@ class Routing:
         """
         Trivially "reverse engineer" a circuit based on routes
         """
+        self.sanity_check()
         
         # TODO: Code is ugly, refactor to proper Int/Mul types which can do most of this
         
@@ -614,7 +723,6 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
     
     def __init__(self, routes: List[Route] = []):
         super().__init__(routes=routes)
-        self.u_constant = False
     
     def int(self, *, id=None, ic=0, slow=False):
         "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
@@ -622,16 +730,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         self.set_ic(el, ic)
         self.set_k0(el, MIntBlock.slow if slow else MIntBlock.fast)
         return el
-    
-    def use_constant(self, use_constant=True):
-        """
-        Useful values for the constant:
-    
-        * ``True`` or ``1.0`` or ``1``: Makes a constant ``+1``
-        * ``0.1`` makes such a constant
-        * ``False`` or ``None`` removes the overall constant
-        """
-        self.u_constant = use_constant
+
     
     def load(self, config_message):
         """
@@ -683,7 +782,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         cluster_config.update(Probes.generate(self).items())
         
         # send constant configuration regardless of it's value, because
-        # False and None are also valid.
+        # False and None are also valid.s
         cluster_config["/U"]["constant"] = self.u_constant
             
         return cluster_config 
