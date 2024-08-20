@@ -39,9 +39,9 @@ result  = sim.solve_ivp(t_final,
 # Get data from x- and y-integrator
 x_out, y_out, z_out = result.y[mx.id], result.y[my.id], result.y[mz.id]
 
-#plt.plot(z_out, x_out)                     # Create a phase space plot.
-plt.plot(x_out)
-plt.plot(y_out)
-plt.plot(z_out)
+plt.plot(z_out, x_out)                     # Create a phase space plot.
+#plt.plot(x_out)
+#plt.plot(y_out)
+#plt.plot(z_out)
 plt.show()                                  # Display the plot.
 
