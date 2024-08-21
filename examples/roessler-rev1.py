@@ -31,10 +31,8 @@ r.connect(mz,    prod.a, weight = -1)
 r.connect(x,     prod.b)
 r.connect(const, prod.b, weight = -0.3796)
 
-sink = 12 # third Multiplier
-acl_lane = 24
-r.add( Route(x.out, acl_lane+5, 1.0, sink) )
-r.add( Route(my.out, acl_lane+6, 1.0, sink) )
+r.probe(x, front_port=6)
+r.probe(my, front_port=7)
 
 hc = LUCIDAC()
 

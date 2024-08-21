@@ -29,14 +29,10 @@ def sinus(i0, i1):
     rev1.int(id=i0, ic=+1, slow=False)
     rev1.int(id=i1, ic=0, slow=False)
     
-    rev1.add( Route(i0, 2,  0.25, i1) )
-    rev1.add( Route(i1, 3, -0.5,  i0) )
-
-    acl_lane = 24 # first ACL lane
-    
-    # ATTENTION: acl_lane+0 is DEFECT in given unit
-    rev1.add( Route(i0, acl_lane+1, 1.0, i0) )
-    rev1.add( Route(i1, acl_lane+2, 1.0, i0) )
+    rev1.route(i0, 2,  0.25, i1)
+    rev1.route(i1, 3, -0.5,  i0)
+    rev1.probe(i0, front_port=6)
+    rev1.probe(i1, front_port=7)
 
     print(rev1)
 
@@ -82,14 +78,11 @@ def lane_sinus(lane0, lane1):
     rev1.int(id=i0, ic=+1, slow=False)
     rev1.int(id=i1, ic=0, slow=False)
     
-    rev1.add( Route(i0, lane0,  1, i1) )
-    rev1.add( Route(i1, lane1, -1,  i0) )
-
-    acl_lane = 24 # first ACL lane
-    
-    # ATTENTION: acl_lane+0 is DEFECT in given unit
-    rev1.add( Route(i0, acl_lane+6, 1.0, i0) )
-    rev1.add( Route(i1, acl_lane+7, 1.0, i0) )
+    rev1.route(i0, lane0,  1, i1)
+    rev1.route(i1, lane1, -1,  i0)
+ 
+    rev1.probe(i0, front_port=6)
+    rev1.probe(i1, front_port=7)
 
     print(rev1)
 
