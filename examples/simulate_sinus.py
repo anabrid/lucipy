@@ -13,10 +13,10 @@ m1 = ode.mul()
 m2 = ode.mul()
 
 routes = [
-    Route(c.out,  0, +0.5,  x.a),
+    #Route(c,  0, +0.5,  x.a),
     
-    #Route(x.out,  0,    +0.5,  y.a),
-    #Route(y.out,  1,    -0.5,  x.a),
+    Route(x.out,  0,    +0.5,  y.a),
+    Route(y.out,  1,    -0.5,  x.a),
     
 #    Route(c.out,  2,   -1.0, m0.a),
 #    Route(x.out,  3,    1.0, m0.b),
@@ -32,50 +32,51 @@ routes = [
 
     # view-only routes
     # keep in mind lane 8 is defective
-    Route(x.out,  8,   0,  0),
-    Route(y.out,  9,   0,  0),
+    #Route(x.out,  8,   0,  0),
+    #Route(y.out,  9,   0,  0),
     
     # DAQ channels are 0 and 1
 ]
 
 ode.add(routes)
 
+sim = Simulation(ode)
+print(f"{sim.nonzero()=}")
+
+res = sim.solve_ivp(t_final=12, dense_output=True)
+print(res)
+
+from pylab import *
+
+ion()
+x,y,z, *others = res.sol(linspace(0,12))
+plot(x)
+plot(y)
+plot(z)
+
 if False:
-    sim = simulation(ode)
-    print(f"{sim.nonzero()=}")
+    #lucidac_endpoint = "tcp://192.168.150.127" # Frankfurt
+    lucidac_endpoint = "tcp://192.168.102.230" # Ulm
+    lucidac_endpoint = "tcp://192.168.100.143" # Frankfurt in Ulm
 
-    res = sim.solve_ivp(t_final=12, dense_output=True)
+    hc = LUCIDAC(lucidac_endpoint)
+    hc.query("reset")
+    hc.set_config(ode.generate())
 
-    from pylab import *
+    manual_control = True
+    if manual_control:
+        print("IC")
+        hc.query("manual_mode", dict(to="ic"))
+        sleep(1)
+        print("OP")
+        hc.query("manual_mode", dict(to="op"))
+        sleep(20)
+        print("HALT")
+        hc.query("manual_mode", dict(to="halt"))
+    else:
+        hc.set_op_time(ms=1000)
+        hc.set_daq(num_channels=2)
+        hc.run_config.halt_on_overload = False
 
-    ion()
-    x,y,z, *others = res.sol(linspace(0,12))
-    plot(x)
-    plot(y)
-    plot(z)
-
-#lucidac_endpoint = "tcp://192.168.150.127" # Frankfurt
-lucidac_endpoint = "tcp://192.168.102.230" # Ulm
-lucidac_endpoint = "tcp://192.168.100.143" # Frankfurt in Ulm
-
-hc = LUCIDAC(lucidac_endpoint)
-hc.query("reset")
-hc.set_config(ode.generate())
-
-manual_control = True
-if manual_control:
-    print("IC")
-    hc.query("manual_mode", dict(to="ic"))
-    sleep(1)
-    print("OP")
-    hc.query("manual_mode", dict(to="op"))
-    sleep(20)
-    print("HALT")
-    hc.query("manual_mode", dict(to="halt"))
-else:
-    hc.set_op_time(ms=1000)
-    hc.set_daq(num_channels=2)
-    hc.run_config.halt_on_overload = False
-
-    run = hc.start_run()
+        run = hc.start_run()
 

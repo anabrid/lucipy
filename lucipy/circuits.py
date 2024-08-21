@@ -385,6 +385,16 @@ class Routing:
                 if route.lane in [ r.lane for r in self.routes ]:
                     raise ValueError("Cannot append {route} because this lane is already occupied.")
                 physical = route
+        
+        # do a final sanity check on the physical route
+        # code comes from Connection()
+        if isinstance(physical.uin, get_args(Ele)):
+            physical = Route(physical.uin.out, physical.lane, physical.coeff, physical.iout)
+        if isinstance(physical.iout, get_args(Ele)):
+            # TODO this should spill out an error if the Ele has more then one inputs
+            raise ValueError(f"Please provide port for lane output in {physical}")
+            #target = target.a
+                
         self.routes.append(physical)
         return physical
 
