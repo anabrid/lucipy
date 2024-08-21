@@ -18,15 +18,12 @@ sprott = Circuit()
 # REV1 M0 = Mint
 # REV1 M1 = MMul
 
-mx      = 0 #sprott.int(ic = .1)
-my      = 1 #sprott.int()
-mz      = 2# sprott.int()
-# Mul = namedtuple("Mul", ["id", "out", "a", "b"])
-mxy    = Mul(0, 8, 8,   9) # sprott.mul()
-yz     = Mul(1, 9, 10, 11) #sprott.mul()
-
-# set ICs
-sprott.set_ic(mx, .1)
+mx      = sprott.int(ic = .1)
+my      = sprott.int()
+mz      = sprott.int()
+mxy     = sprott.mul()
+yz      = sprott.mul()
+const   = sprott.const()
 
 # use constant at lane 24
 sprott.use_constant()
@@ -40,7 +37,8 @@ sprott.connect(yz, mx, weight = 10)         # x' = yz
 
 sprott.connect(mx, my, weight = -1)         # y' = x - y
 sprott.connect(my, my)
-sprott.add( Route(const_clane, acl_lane+5, 0.1, mz) )      # z' = 1 - xy (scaled!)
+sprott.connect(const, mz, weight = 0.1)     # z' = 1 - xy (scaled!)
+
 sprott.connect(mxy, mz, weight = 10)
 
 sprott.connect(mx, mxy.a)                   # -xy
@@ -49,11 +47,8 @@ sprott.connect(my, mxy.b, weight = -1)
 sprott.connect(my, yz.a)                    # yz
 sprott.connect(mz, yz.b)
 
-
-sink = 12 # third Multiplier
-
-sprott.add( Route(mx, acl_lane+6, 1.0, sink) )
-sprott.add( Route(my, acl_lane+7, 1.0, sink) )
+sprott.probe(mx, front_port=6)
+sprott.probe(my, front_port=7)
 
 hc = LUCIDAC()
 

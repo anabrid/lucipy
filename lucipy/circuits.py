@@ -25,6 +25,7 @@ from typing import get_args, List, Dict, Union, Optional
 flatten = lambda lst: functools.reduce(operator.iconcat, lst, [])
 find = lambda crit, default, lst: next((x for x in lst if crit(x)), default)
 clean = lambda itm: [ k[0] if len(k)==1 else (None if len(k)==0 else k) for k in itm ]
+notNone = lambda thing: thing != None
 
 def window(seq, n=2):
     "Returns a sliding window (of width n) over data from the iterable"
@@ -55,7 +56,7 @@ def next_free(occupied: List[bool], criterion=None, append_to:int=None) -> Optio
       value is fine. Can be used for constraining an acceptable next free lane.
     """
     for idx, val in enumerate(occupied):
-        if not val and (criterion(val) if criterion else True):
+        if not val and (criterion(idx) if criterion else True):
             return idx
     return len(occupied) if append_to != None and len(occupied) < append_to else None
 
@@ -65,7 +66,9 @@ Int = namedtuple("Int", ["id", "out", "a"])
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])
 Id  = namedtuple("Id",  ["id", "out", "a"])
 Const = namedtuple("Const", ["id", "out" ])
-Ele = Union[Int,Mul,Const]
+Out = namedtuple("Out", ["id", "lane"]) # ACL_OUT Front panel output.
+Ele = Union[Int,Mul,Const,Id,Out]
+isEle = lambda thing: isinstance(thing, get_args(Ele))
 
 
 class DefaultLUCIDAC:
@@ -82,9 +85,11 @@ class DefaultLUCIDAC:
     num_mul = 4
     num_const = 2 # REV1 has constant givers in U block, this is purely "virtual" here
     num_id  = 4 # REV1 identity elements in MMul block
+    num_acls = 8 # REV1 ACL_IN and ACL_OUT ports (each)
     
     MIntOffset = 0       # M0 block
     MMulOffset = num_int # M1 block
+    acl_offset = 24 # where the ACL lanes start
 
     @staticmethod
     def reservoir(default_value=False):
@@ -92,6 +97,7 @@ class DefaultLUCIDAC:
             Int:   [default_value]*DefaultLUCIDAC.num_int,
             Mul:   [default_value]*DefaultLUCIDAC.num_mul,
             Const: [default_value]*DefaultLUCIDAC.num_const,
+            Out:   [default_value]*DefaultLUCIDAC.num_acls,
             Id:    [default_value]*DefaultLUCIDAC.num_id,
         }
     
@@ -121,6 +127,8 @@ class DefaultLUCIDAC:
             # const(idx=0) => taken from clane 14 => has to be used in lanes  0..15
             # conts(idx=1) => taken from clane 15 => has to be used in lanes 16..31
             return Const(idx, 14 + idx)
+        if t == Out:
+            return Out(idx, cls.acl_offset + idx)
         
     @staticmethod
     def populated():
@@ -182,7 +190,7 @@ class Reservoir:
         except KeyError:
             raise TypeError(f"Computing Element Type {t} not supported. Valid ones are {', '.join(map(str, self.allocated.keys()))}")
         except IndexError:
-            raise ValueError(f"Have only {len(allocated[t])} Computing Elements of Type {t} available, inexistent id {id} requested.")
+            raise ValueError(f"Have only {len(self.allocated[t])} Computing Elements of Type {t} available, inexistent id {id} requested.")
 
     # TODO: Rename to "integrator" in order to make sure
     #       it is not misunderstood as "integration"
@@ -210,26 +218,24 @@ class Reservoir:
     def muls(self, count):
         "Allocate count many multipliers"
         return [self.mul() for x in range(count)]
+    
+    def front_output(self, id=None):
+        "ACL_OUT"
+        return self.alloc(Out, id)
 
 
 Route = namedtuple("Route", ["uin", "lane", "coeff", "iout"])
 
 def Connection(source:Union[Ele,int], target:Union[Ele,int], weight=1):
     """
-    Transforms an argument list somewhat similar to a "logical route" in the
-    lucicon code to a physical route.
-        
+    Syntactic sugar for a "logical route", i.e. a Route without a lane.        
+
     >>> r = Reservoir()
     >>> I1, M1 = r.int(), r.mul()
     >>> Connection(M1.a, I1)
-    Route(uin=0, lane=None, coeff=1, iout=8)
+    Route(uin=0, lane=None, coeff=1, iout=8) # likely wrong
 
     """
-    if isinstance(source, get_args(Ele)):
-        source = source.out
-    if isinstance(target, get_args(Ele)):
-        # TODO this should spill out an error if the Ele has more then one inputs
-        target = target.a
     return Route(source, None, weight, target)
 
 class MIntBlock:
@@ -293,6 +299,9 @@ class Routing:
     max_lanes = 32
     #routes : List[Route]
     
+    #: iout constant in order to not connect.
+    do_not_connect = -1
+    
     def available_lanes(self):
         # for a fully functional lucidac, do this:
         return list(range(32))
@@ -304,8 +313,10 @@ class Routing:
     
     def __init__(self, routes: List[Route] = None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
-        self.routes = routes if routes else []
+        self.routes = []
         self.u_constant = False
+        if routes:
+            self.add(routes)
     
     def randomize(self, num_lanes=32, max_coeff=+10, seed=None):
         """
@@ -355,52 +366,63 @@ class Routing:
     def add(self, route_or_list_of_routes:Union[Route,List[Route]]):
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
-        route = route_or_list_of_routes # probably unrouted route
-        physical = None                 # certainly routed route
         
-        if self.u_constant:
-            if isinstance(route.uin, Const):
-                if route.lane is None:
-                    if route.uin.out == 14:
-                        lane = self.next_free_lane(lambda potential_lane: 15 < potential_lane)
-                    elif route.uin.out == 15:
-                        lane = self.next_free_lane(lambda potential_lane: potential_lane < 15)
-                    else:
-                        raise ValueError(f"Unacceptable Constant clane requested in unrouted {route}")
-                    physical = Route(route.uin, lane, route.coeff, route.iout)
+        route = route_or_list_of_routes
+        uin, lane, coeff, iout = route
+       
+        if isinstance(uin, Const):
+            left_ublock_chip = lambda potential_lane: 15 < potential_lane
+            right_ublock_chip = lambda potential_lane: not left_ublock_chip
+            if lane is None:
+                if uin.out == 14:
+                    criterion = left_ublock_chip
+                elif uin.out == 15:
+                    criterion = right_ublock_chip
                 else:
-                    if route.uin.out == 14 and route.lane < 16:
-                        raise ValueError(f"No Constant available at {route}, lane must be >15")
-                    if route.uin.out == 15 and route.lane > 15:
-                        raise ValueError(f"No Constraint available at {route}, lane must be ...")
-                    physical = route
+                    raise ValueError(f"Unacceptable Constant clane requested in unrouted {route}")
+                lane = self.next_free_lane(criterion)
             else:
-                # probably need som sanity checks or similiar
-                pass
-            
-        if not physical:
-            if route.lane is None:
-                physical = Route(route.uin, self.next_free_lane(), route.coeff, route.iout)
-            else:
-                if route.lane in [ r.lane for r in self.routes ]:
-                    raise ValueError("Cannot append {route} because this lane is already occupied.")
-                physical = route
+                if uin.out == 14 and not left_ublock_chip(lane):
+                    raise ValueError(f"No Constant available at {route}, lane must be >15")
+                if uin.out == 15 and not right_ublock_chip(lane):
+                    raise ValueError(f"No Constraint available at {route}, lane must be ...")
         
-        # do a final sanity check on the physical route
-        # code comes from Connection()
-        if isinstance(physical.uin, get_args(Ele)):
-            physical = Route(physical.uin.out, physical.lane, physical.coeff, physical.iout)
-        if isinstance(physical.iout, get_args(Ele)):
-            # TODO this should spill out an error if the Ele has more then one inputs
-            raise ValueError(f"Please provide port for lane output in {physical}")
-            #target = target.a
-                
-        self.routes.append(physical)
-        return physical
+        if isinstance(iout, Out):
+            lane = iout.lane
+            iout = self.do_not_connect
+        
+        if lane is None:
+            lane = self.next_free_lane()
+        else:
+            if lane in [ r.lane for r in self.routes ]:
+                raise ValueError("Cannot append {route} because this lane is already occupied.")
+            
+        # at the end, replace the symbols with numbers.
+        if isEle(uin):
+            uin = uin.out
+
+        if isEle(iout):
+            if hasattr(iout, "b"):
+                # element with more then one input
+                raise ValueError(f"Please provide input port for {iout=} in {route}")
+            iout = iout.a
+
+        route = Route(uin, lane, coeff, iout)
+        self.routes.append(route)
+        return route
 
     def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
+        """
+        Syntactic sugar for adding a :func:`Connection`.
+        """
         return self.add(Connection(source,target,weight))
     
+    def route(self, uin, lane, coeff, iout):
+        """
+        Syntactic sugar for adding a :class:`Route`.
+        """
+        return self.add(Route(uin, lane, coeff, iout))
+   
     def routes2input(self) -> UCI:
         """
         Converts the list of routes to an *input matrix representation*. In this format,
@@ -419,7 +441,7 @@ class Routing:
         """
         return UCI(
             U=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
-            I=clean([r.iout for r in self.routes if r.lane == lane] for lane in range(32)),
+            I=clean([r.iout for r in self.routes if r.lane == lane and r.iout != self.do_not_connect] for lane in range(32)),
             C=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
     
@@ -457,6 +479,23 @@ class Routing:
         Checks for computing elements with more then one input whether either no input or
         all are used.
         """
+        warnings = []
+        
+        ### General route check
+        # These are actually not warnings but errors.
+        for route in self.routes:
+            if None in route:
+                warnings.append(f"Route contains None values.")
+            if not route.uin in range(0,16):
+                warnings.append(f"Uin out of range in {route}")
+            if not route.lane in range(0,32):
+                warnings.append(f"Lane out of range in {route}")
+            if not (-20 <= route.coeff and route.coeff <= +20):
+                warnings.append(f"Coefficient out of range in {route}")
+            if not route.iout in range(0,32) and route.iout != self.do_not_connect:
+                warnings.append(f"Iout out of range in {route}")
+        
+        ### Multiplier check
         multipliers_used = [False]*DefaultLUCIDAC.num_mul
         multipliers = [ DefaultLUCIDAC.make(Mul, i) for i in range(DefaultLUCIDAC.num_mul) ]
 
@@ -474,7 +513,6 @@ class Routing:
             return connected
         
         # then determine if all ports are connected
-        warnings = []
         for i,(used, m) in enumerate(zip(multipliers_used, multipliers)):
             if used:
                 if not has_connection(lambda route: route.uin == m.out):
@@ -703,13 +741,27 @@ class Probes:
     def __init__(self, acl_select=None, adc_channels=None, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.acl_select = acl_select if acl_select else []
-        self.adc_channels = adc_channels if adc_channels else []
+        self.adc_channels = adc_channels if adc_channels else [None]*8
         
     def set_acl_select(self, acl_select):
         self.acl_select = acl_select
         
     def set_adc_channels(self, adc_channels):
         self.adc_channels = adc_channels
+
+    def measure(self, source:Union[Ele,int], adc_channel=None):
+        """
+        Syntactic sugar to set an adc_channel.
+        """
+        if adc_channel == None:
+            # TODO is untested
+            adc_channel = next_free(map(notNone, self.adc_channels))
+        if not adc_channel in range(0,8):
+            raise ValueError(f"{adc_channel=} illegal, expecting in 0..7")
+        # first have to look for element in routing
+        uin = source.out if isEle(source) else source
+        self.adc_channels[adc_channel] = uin
+        return adc_channel
         
     def generate(self):
         ret = {}
@@ -717,7 +769,9 @@ class Probes:
             #if not all(isinstance(v, bool) for v in self.acl_select):
             #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
             ret["acl_select"] = self.acl_select
-        if self.adc_channels:
+        if any(filter(notNone, self.adc_channels)):
+            print("adc_channels -> ", self.adc_channels)
+            # TODO: Probably check again with the Nones.
             if not all(isinstance(v, int) for v in self.adc_channels):
                 raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
             ret["adc_channels"] = self.adc_channels
@@ -740,7 +794,23 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         self.set_ic(el, ic)
         self.set_k0(el, MIntBlock.slow if slow else MIntBlock.fast)
         return el
-
+    
+    def probe(self, source:Union[Ele,int], front_port=None):
+        """
+        Syntactic sugar to put a port to the front panel output.
+        The name indicates that an oscilloscope probe shall be connected
+        to this port.
+        If no port is given, will count up.
+        
+        This is basically sugar for ``circuit.connect(something, circuit.front_output(front_port))``.
+       
+        :arg front_output: Integer describing the front port number (0..7)
+        :returns: The generated Route (is also added)
+        
+        See also :meth:`Circuit.measure` for putting a singal to ADC/DAQ.
+        """
+        target = self.alloc(Out, front_port) # None passes to default alloc None!
+        return self.add(Connection(source, target))
     
     def load(self, config_message):
         """
