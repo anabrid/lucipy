@@ -4,7 +4,8 @@ Circuit notation and Compilation
 ================================
 
 Lucipy ships with a number of tools to manipulate the LUCIDAC interconnection matrix
-(also known as *UCI matrix*).
+(also known as *UCI matrix*). In particular, the :package:`circuits` package provides
+a *grammar* for connecting analog computing elements in the LUCIDAC.
 
 
 Reconfigurable analog circuit model
@@ -16,6 +17,9 @@ analog computer topology (we have much nicer schemata available which will evven
 replace this one):
 
 .. only::html
+
+   TODO: Figure is outdated, for REV0. Must be updated for REV1 or even be replaced
+         with nicer schematics.
 
    ::
 

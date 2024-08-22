@@ -34,7 +34,7 @@ class Simulation:
     
     Important properties and limitations:
     
-    * Currently only understands mblocks ``M1 = Mul`` and ``M0 = Int``
+    * Currently only understands mblocks ``M0 = Int`` and ``M1 = Mul`` in REV1-Hardware fashion
     * Unrolls Mul blocks at evaluation time, which is slow
     * Note that the system state is purely hold in I.
     * Note that k0 is implemented in a way that 1 time unit = 10_000 and
@@ -59,10 +59,10 @@ class Simulation:
     
     def __init__(self, circuit, realtime=False):
         import numpy as np
+        
+        circuit.sanity_check()
 
-        self.UCI = circuit.to_dense_matrix()
-        self.A, self.B, self.C, self.D = split(self.UCI, 8, 8)
-        self.ics = circuit.ics
+        self.ics = np.array(circuit.ics)
         
         # C*U: only required for acl_out_values()
         U, C, I = circuit.to_dense_matrices()
@@ -71,11 +71,37 @@ class Simulation:
         assert self.CU.shape == (32,16)
         
         self.circuit = circuit # only used in set_acl_in
-        self.use_acl_in = False
+        self.use_acl_in = False # TODO unfinished work
         
         # whether to use the constant giver
-        # TODO: Derive from circuit!
-        self.use_constant = False
+        self.u_constant = circuit.u_constant
+        
+        if self.u_constant:
+            # Handle the effects of the constant giver.
+        
+            #
+            # | clanes | U lanes[0:15] | U lanes [16:31]
+            # | ------ | ------        | -----     
+            # | 14     |  Mblock out   | CONSTANTS
+            # | 15     |  CONSTANTS    | Mblock out
+            
+            const_masked = [ U[0:16, 14], U[16:32, 15] ]
+            
+            # compute how constants are connected in the system.
+            # The constant vector has size 16 and adds up to the Mblocks_input
+            ublock_const_output = np.hstack(const_masked)
+            self.constant = I.dot(C.dot(ublock_const_output * self.u_constant))
+            
+            # cut out the relevant lines in system, no transmission possible from Mout to Min.
+            for item in const_masked:
+                item[:] = 0
+            
+            self.UCI = I.dot(C.dot(U))
+        else:
+            self.UCI = circuit.to_dense_matrix()
+            self.constant = np.zeros((16,))
+            
+        self.A, self.B, self.C, self.D = split(self.UCI, 8, 8)            
         
         config = circuit.generate()
         self.acl_select = config["acl_select"] if "acl_select" in config else []
@@ -87,7 +113,7 @@ class Simulation:
         
     def Mul_out(self, Iout, t=0):
         """
-        Determine Min from Iout, the 'loop unrolling' way
+        Determine Min from Iout, the 'loop unrolling' way.
     
         :arg Iout: Output of MathInt-Block. This is a list with 8 floats. This
            is also the current system state.
@@ -98,11 +124,11 @@ class Simulation:
         import numpy as np
 
         Min0 = np.zeros((8,)) # initial guess
-        constants = np.ones((4,)) # constant sources on Mblock
+        identities = Min0[0:4] # constant sources on MMulblock. TODO check if this is correct
         
         # Compute the actual MMulBlock, computing 4 multipliers and giving out constants.
         mult_sign = +1 # in LUCIDACs REV1, multipliers do *no more* negate!
-        Mout_from = lambda Min: np.concatenate((mult_sign*np.prod(Min.reshape(4,2),axis=1), constants))
+        Mout_from = lambda Min: np.concatenate((mult_sign*np.prod(Min.reshape(4,2),axis=1), identities))
         
         Mout = Mout_from(Min0)
         Min = Min0
@@ -110,7 +136,9 @@ class Simulation:
         max_numbers_of_loops = 4 # = number of available multipliers (in system=on MMul)
         for loops in range(max_numbers_of_loops+1):
             Min_old = Min.copy()
-            Min = self.A.dot(Mout)
+            
+            # TODO: The choice of C and D is determined by the assumption of MMulBlock at M1 slot.
+            Min = self.C.dot(Iout)
             if self.use_acl_in:
                 # TODO: For REV1, the position of MMul and MInt changes anyway!
                 #       This needs adoption.
@@ -122,7 +150,8 @@ class Simulation:
                 Mblocks_in = self.I.dot(CU_out)
                 Min += Mblocks_in[0:8] # to be fixed for REV1
             else:
-                Min += self.B.dot(Iout)
+                Min += self.D.dot(Mout)
+            Min += self.constant[8:16] # constants for M1
             Mout = Mout_from(Min)
             #print(f"{loops=} {Min=} {Mout=}")
 
@@ -161,12 +190,15 @@ class Simulation:
             Iout[Iout < -1.4] = -1.4 + eps
 
         Mout = self.Mul_out(Iout, t)
-        Iin = self.C.dot(Mout)
+        
+        # TODO: The choice of A and B is determined by MIntBlock at M0 position
+        Iin = self.A.dot(Iout)
         if self.use_acl_in:
             # same restricts as in Mul_out!
             pass
         else:
-            Iin += self.D.dot(Iout)
+            Iin += self.B.dot(Mout)
+        Iin += self.constant[0:8] # constants for M0
         int_sign  = -1 # in LUCIDAC REV1, integrators *do* negate
         #print(f"{Iout[0:2]=} -> {Iin[0:2]=}")
         #print(t)
@@ -240,7 +272,7 @@ class Simulation:
         self.use_acl_in = True
         self.acl_in_callback = callback
 
-    def solve_ivp(self, t_final, clip=True, ics=None, **kwargs_for_solve_ivp):
+    def solve_ivp(self, t_final, clip=True, ics=None, ics_sign=-1, **kwargs_for_solve_ivp):
         """
         Solves the initial value problem defined by the LUCIDAC Circuit.
         
@@ -255,6 +287,10 @@ class Simulation:
         :arg method: value ``LSODA`` is good for stiff problems
         :arg t_eval: In order to get a solution on equidistant time, for instance you can
            pass this option an ``np.linspace(0, t_final, num=500)``
+        :arg ics_sign: The overall sign for the integrator initial conditions. Since the real
+           LUCIDAC (REV1) has negating integrators as the classical integrators but the
+           numerical simulation simulates this sign, a ``-1`` is correct here. Better don't
+           touch it to remain compatible to the hardware.
         
         Quick usage example:
         
@@ -277,6 +313,8 @@ class Simulation:
             ics = self.ics
         elif len(ics) < len(self.ics):
             ics = list(ics) + [0]*(len(self.ics) - len(ics))
+            
+        ics = ics_sign * np.array(ics)
         
         from scipy.integrate import solve_ivp
         data = solve_ivp(lambda t,state: self.rhs(t,state,clip), [0, t_final], ics, **kwargs_for_solve_ivp)
