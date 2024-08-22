@@ -4,84 +4,37 @@ Circuit notation and Compilation
 ================================
 
 Lucipy ships with a number of tools to manipulate the LUCIDAC interconnection matrix
-(also known as *UCI matrix*). In particular, the :package:`circuits` package provides
+(also known as *UCI matrix*). In particular, the :mod:`~lucipy.circuits` package provides
 a *grammar* for connecting analog computing elements in the LUCIDAC.
 
+A grammar for describing circuits
+---------------------------------
 
-Reconfigurable analog circuit model
------------------------------------
+The :mod:`~lucipy.circuits` package allows to set up an analog computation circuit with
+a number of simple methods which define a "grammar" in terms of a traditional object
+oriented "subject verb object" notation. For instance, ``circuit.connect(a,b)`` has the
+quite obvious meaning to tell the ``circuit`` to connect ``a`` to ``b``
+(see :meth:`~lucipy.Route.connect` for details). Other "literal
+methods" are for instance ``circuits.probe(a)`` which tells that ``a`` can be
+externally probed with an oscilloscope (see :meth:`~lucipy.Route.probe`)
+or ``circuits.measure(a)`` which tells that ``a`` shall be internally measured by the
+data acquisition (analog to digital converters, ADCs; see :meth:`~lucipy.Route.measure`).
 
-The focus of this library is on **REV0** LUCIDAC hardware.
-What follows is quickly drawn ASCII diagram of this particular
-analog computer topology (we have much nicer schemata available which will evventually
-replace this one):
+.. note::
 
-.. only::html
+   Note that setting up circuits is, by purpose, intrinsically decoupled from configuring
+   the actual hardware. Therefore, when working on a :class:`~lucipy.circuits.Circuit` class as
+   in the examples given in the previous paragraph, this **currently** has **no immediate effect**
+   on the hardware. Instead, the new analog wiring is only written out when calling the
+   :meth:`~lucipy.synchc.LUCIDAC.set_circuit` methods as in ``lucidac.set_circuit(circuit.generate())``.
+   
+   Future variants of this code may add an *immediate* variant which writes out Routes and
+   other configuration as soon as they are defined.
 
-   TODO: Figure is outdated, for REV0. Must be updated for REV1 or even be replaced
-         with nicer schematics.
 
-   ::
-
-                                                                           
-            ┌───────────────────────      ┌──────────────────────────────┐
-            │Math Block M1     m0  0  ->  │U Block                       │
-            │4 x Multipliers   m1  1      │16 inputs, fanout on          │
-            │2in, 1out each    m2  2      │32 outputs (called lanes)     │
-            │                  m3  3      │                              │
-      ┌───► │                  .   4 ───► │It is a 16x32 bitmatrix.      │
-      │     │constant givers   .   5      │                              │
-      │     │                  .   6      │                              │
-      │     │                  .   7  ->  │                              │
-      │     └───────────────────────      │                              │
-      │                                   │                              │
-      │     ┌───────────────────────      │                              │
-      │     │Math Block M2     i0  8  ->  │                              │
-      │     │8 x Integrators   i1  9      │                              │
-      │     │1in, 1out each    i2 10      │                              │
-      │     │                  i3 11 ───► │                              │
-      │  ┌► │                  i4 12      │                              │
-      │  │  │            i     i5 13      │                              │
-      │  │  │                  i6 14      │                              │
-      │  │  │                  i7 15  ->  │                              │
-      │  │  └───────────────────────      └──────────────┬───────────────┘
-      │  │                                               │                
-      │  │                                ┌──────────────▼───────────────┐
-      │  │                                │C block.                      │
-      │  │                                │32 coefficients               │
-      │  │                                │value [-20,+20] each          │
-      │  │                                │                              │
-      │  │                                └──────────────┬───────────────┘
-      │  │                                               │                
-      │  │   ┌───────────────────────     ┌──────────────▼───────────────┐
-      │  │   │Math Block M1     m0a 0 <-  │I Block                       │
-      │  │   │4 x Multipliers   m0b 1     │32 inputs, fanin to           │
-      │  │   │2in, 1out each    m1a 2     │16 outputs                    │
-      │  │   │                  m1b 3 ◄───┤                              │
-      └──┼── │                  m2a 4     │It is a 32x16 bitmatrix       │
-         │   │constant givers   m2b 5     │which performs implicit       │
-         │   │                  m3a 6     │summation of currents         │
-         │   │                  m3b 7 <-  │                              │
-         │   └───────────────────────     │                              │
-         │                                │                              │
-         │   ┌───────────────────────     │                              │
-         │   │Math Block M2     i0  8 <-  │                              │
-         │   │8 x Integrators   i1  9     │                              │
-         │   │1in, 1out each    i2 10     │                              │
-         │   │                  i3 11     │                              │
-         │   │                  i4 12 ◄───┤                              │
-         └───┤                  i5 13     │                              │
-            │                  i6 14     │                              │
-            │                  i7 15 <-  │                              │
-            └───────────────────────     └──────────────────────────────┘
-
-Concept
--------
-
-The main usage shall be demonstrated on the Lorenz attractor example
-(see also :ref:`example-circuits`). It can be basically entered as
-element connection diagram:
-
+The typical usage of the :class:`~lucipy.circuits.Circuit` class shall be demonstrated on the Lorenz
+attractor example (see also :ref:`example-circuits`). It can be basically entered as
+element connection diagram :
 
 .. code-block:: python
 
@@ -112,7 +65,7 @@ element connection diagram:
    lorenz.connect(xs, y, weight=-1.536)
    lorenz.connect(y,  y, weight=-0.1)
 
-Internally, the library stores :py:class:`Route` tuples:
+Internally, the library stores :py:class:`~lucipy.circuits.Route` tuples:
 
 .. code-block:: python
 
@@ -131,9 +84,16 @@ Internally, the library stores :py:class:`Route` tuples:
    Route(uin=8, lane=8, coeff=0, iout=6),
    Route(uin=9, lane=9, coeff=0, iout=6)])
 
-By concept, there is **no symbolic representation** but instead
-**immediate destruction of any symbolics**. However, the "initial
-format" can be easily decompiled:
+By concept, there is **no (internal) symbolic representation** but instead
+*immediate destruction* of any symbolics to the integer indices of what they enumerate
+We call this "early compilation" and distinguish it from a "late compilation" which
+tries to retain an *intermediate representation* as long as possible. In particular,
+this "compiler" does a pick-and-place as soon as possible (not delayed) and thus
+intentionally cannot do any kind of *optimization*. It is, after all, intentionally
+a very simple compiler which tries to do its scope as good as possible.
+
+The "pseudo-symbolic" input format can be easily "decompiled" with
+:meth:`~lucipy.circuits.Routing.reverse`:
 
 .. code-block:: python
 
@@ -152,14 +112,60 @@ format" can be easily decompiled:
    Connection(Int0, Mul3.a, weight=0),
    Connection(Int1, Mul3.a, weight=0)
 
-Where :py:func:`Connection` is just a function that generates a :py:class:`Route`.
-   
-Export formats
---------------
+Fundamental building blocks
+---------------------------
 
-There are various methods available to convert a Routing list to
-other representations. First of all, the LUCIDAC sparse JSON configuration format can
-be generated:
+The fundamental building block of this circuit description language is the
+:class:`~lucipy.circuits.Route`. As written in the corresponding API docs, a
+:meth:`~lucipy.circuits.Conncetion` is just a function that produces a 
+:class:`~lucipy.circuits.Route` which is not yet placed (some codes also refer to
+this as "logical routes").
+
+The other fundamental ingredient are actual element descriptions, for instance
+for the Integrator (:class:`~lucipy.circuits.Int`) or Multiplier
+(:class:`~lucipy.circuits.Mul`). In *lucipy*, these classes always represent
+routed "physical" computing elements, i.e. they describe actual and really existing
+computing elements. The code currently has no concept for unrouted computing elements.
+This makes sense if you keep in mind that by intention this code tries to place early
+and allocate on a greedy basis, something which one can do for a simple system such as
+LUCIDAC with it's all-to-all connectivity.
+
+A guiding principle at the design of this library was to **minimize the amount of code**
+users have to write. This is done by providing *one* big class interface with the
+:class:`~lucipy.circuits.Circuit` class which itself inherits a number of more specialized
+classes that deal with the particular parts of the hardware model.
+
+Ideally, users have only to import this single class in order to work with the package.
+Instances of all classes described in this section can be obtained with various helper methods.
+For instance, the :class:`~lucipy.circuits.Reservoir` class does the accounting (greedy place
+and routing) and thus hands out instances of the computing elements. This is just one of many
+base classes of a :class:`~lucipy.circuits.Circuit`. Other examples are the
+:meth:`~lucipy.circuits.Routing.route` and :meth:`~lucipy.circuits.Routing.connect` methods
+of the :class:`~lucipy.circuits.Routing` class which hand out (and register)
+:class:`~lucipy.circuits.Route` and :meth:`~lucipy.circuits.Conncetion`.
+   
+Import and Export formats
+-------------------------
+
+This section shall provide an overview about the various import and export formats available
+in the :mod:`lucipy.circuits` package. In case of an *export*, a method converts
+the internal routing list representation to some other, typically equivalent representation.
+In case of an *import*, a non-native representation is re-interpreted as a route of lists.
+
+JSON configuration format
+.........................
+
+The most important format is the *LUCIDAC protocol* format (see the
+`REDAC communication protocol <https://anabrid.dev/docs/hybrid-controller/d1/d1b/protocol.html>`_
+in the LUCIDAC/REDAC firmware documentation). It is a sparse JSON format
+and lucipy is able to import to and export from this format by emitting or reading the
+corresponding python nested dictionary/list data structures which can easily be serialized
+to/from JSON with the python-included ``json`` package.
+
+The import form/export to this format is the most important one in the whole package. The
+export is provided by :meth:`~lucipy.circuits.Circuit.generate` and the import is provided
+by :meth:`~lucipy.circuits.Circuit.load`. Here is an example how to export the Lorenz
+circuit given in the sections above:
 
 .. code-block:: python
 
@@ -254,7 +260,8 @@ be generated:
       {'k': 10000, 'ic': 0.0}]},
    '/M1': {}}
 
-Therefore one can straight forwardly program a LUCIDAC by writing
+
+This makes it easy to straight forwardly program a LUCIDAC by writing
 
 .. code-block:: python
 
@@ -266,9 +273,17 @@ Therefore one can straight forwardly program a LUCIDAC by writing
    hc.set_config(lorenz.generate())
    hc.start_run() # ...
 
-Also other formats can be generated, for instance a single dense 16x16 matrix
-showing the interconnects, weights and implict sums between the Math
-blocks:
+
+Numpy matrix formats
+....................
+
+A single 16x16 interconnect matrix ``A`` can be generated which describes the
+system interconnection in a traditional matrix scheme ``inputs = A * outputs``,
+see :ref:`sim` for details.
+
+This matrix incorporates the interconncets, weights and implicit sums between Math
+blocks. It can not properly represent the external I/O. Usage requires
+the ``numpy`` package. What follows is a usage example:
 
 .. code-block:: python
 
@@ -294,7 +309,14 @@ blocks:
           [ 0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ],
           [ 0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ]])
 
-This is an export to the ``pybrid`` DSL:
+Other formats exist, for instance to export the internal U, C and I
+matrices seperately.
+
+
+pybrid interface
+................
+
+This is an export to the ``pybrid`` DSL (see :ref:`comparison` for details):
 
 .. code-block:: python
 
@@ -325,6 +347,9 @@ This is an export to the ``pybrid`` DSL:
    route -- carrier/0  9  9   0.000  6
    # run --op-time 500000
 
+Sympy interface
+...............
+
 Here comes an export to a Sympy system:
 
 .. code-block:: python
@@ -344,8 +369,12 @@ numerically solved:
    >> [ eq.rhs for eq in lorenz.to_sympy(int_names="xyz", subst_mul=True, no_func_t=True) ]
    [-x + 1.8*y, -1.536*x*(2.67*z - 1.0) - 0.1*y, 1.5*x*y - 0.2667*z]
 
-See :ref:`example-circuits` for further examples.
 
+Random system generation
+........................
+
+For testing and documentation purposes, there is :meth:`Circuit.random` which creates random
+routes. This simplifies writing unit tests (see also :ref:`dev`).
 
 API Docs
 --------

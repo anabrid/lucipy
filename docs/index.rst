@@ -21,10 +21,11 @@ See :ref:`intro` for a beginning.
    :maxdepth: 2
    :caption: Circuits
    
+   model
    compilation
-   example-circuits
    simulation
    emulation
+   example-circuits
    
 .. toctree::
    :maxdepth: 2

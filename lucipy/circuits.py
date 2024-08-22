@@ -60,20 +60,22 @@ def next_free(occupied: List[bool], criterion=None, append_to:int=None) -> Optio
             return idx
     return len(occupied) if append_to != None and len(occupied) < append_to else None
 
-# "in" is a reserved keyword in python, so all inputs are called a,b,c,... even if there is ony one
+## Note on naming:
+## "in" is a reserved keyword in python, so all inputs are called a,b,c,... even if there is ony one
 
-Int = namedtuple("Int", ["id", "out", "a"])
-Mul = namedtuple("Mul", ["id", "out", "a", "b"])
-Id  = namedtuple("Id",  ["id", "out", "a"])
-Const = namedtuple("Const", ["id", "out" ])
-Out = namedtuple("Out", ["id", "lane"]) # ACL_OUT Front panel output.
-Ele = Union[Int,Mul,Const,Id,Out]
+Int = namedtuple("Int", ["id", "out", "a"])       #: Integrator, integrates input "a", output to "out"
+Mul = namedtuple("Mul", ["id", "out", "a", "b"])  #: Multiplier, multiplies inputs "a" with "b", output to "out"
+Id  = namedtuple("Id",  ["id", "out", "a"])       #: Identity element, just passes input "a" to output "out"
+Const = namedtuple("Const", ["id", "out" ])       #: Constant giver, output on (cross lane "out")
+Out = namedtuple("Out", ["id", "lane"])           #: Front panel output (ACL_OUT) on lane "lane"
+Ele = Union[Int,Mul,Const,Id,Out]                 #: type of any kind of element defined so far
 isEle = lambda thing: isinstance(thing, get_args(Ele))
 
 
 class DefaultLUCIDAC:
     """
     This describes a default LUCIDAC REV1 setup with
+    
     - M0 = MIntBlock (8 integrators)
     - M1 = MMulBlock (4 multipliers and ID-lanes)
     
@@ -225,6 +227,25 @@ class Reservoir:
 
 
 Route = namedtuple("Route", ["uin", "lane", "coeff", "iout"])
+"""
+Routes are the essential building block of this circuit API.
+A list of routes is a way to describe the sparse system matrix (UCI-matrix).
+Sparse matrix values ``A[i,j]`` can be described with lists of 3-tuples
+``(i,j,A)``, i.e. the position and value. This is what ``(uin,iout,coeff)``
+basically describe. Additionally, there is the ``lane`` which describes the
+internal structure of the UCI matrix. The maximum of 32 lanes corresponds to
+the fact that only 32 elements within the system matrix can be nonzero.
+
+Python allows for any types for the tuple values. Regularly, instances of
+the computing elements (:class:Int, :class:Mul, etc) are used at the
+``uin`` and ``iout`` slots.
+
+This compiler knows the concept of "not yet placed" routes. This are routes
+where ``lane == None``. Some of our codes refer to such routes as "logical"
+in contrast to "physically" placed routes. In this code, unplaced routes are
+called "Connection", i.e. they can be generated with the :func:Connection
+function.
+"""
 
 def Connection(source:Union[Ele,int], target:Union[Ele,int], weight=1):
     """
@@ -797,12 +818,13 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
     
     def probe(self, source:Union[Ele,int], front_port=None):
         """
-        Syntactic sugar to put a port to the front panel output.
+        Syntactic sugar to route a port to the front panel output.
         The name indicates that an oscilloscope probe shall be connected
         to this port.
         If no port is given, will count up.
         
-        This is basically sugar for ``circuit.connect(something, circuit.front_output(front_port))``.
+        If you need a weight, use :meth:`connect` directly as in
+        ``circuit.connect(source, circuit.front_output(front_port), weight=1.23)``.
        
         :arg front_output: Integer describing the front port number (0..7)
         :returns: The generated Route (is also added)
