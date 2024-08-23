@@ -80,20 +80,22 @@ class Simulation:
             # Handle the effects of the constant giver.
         
             #
-            # | clanes | U lanes[0:15] | U lanes [16:31]
+            # | clanes | U lanes[0:16] | U lanes [16:32]
             # | ------ | ------        | -----     
             # | 14     |  Mblock out   | CONSTANTS
             # | 15     |  CONSTANTS    | Mblock out
             
-            const_masked = [ U[0:16, 14], U[16:32, 15] ]
+            # items in Ublock where the Mblock out is masked
+            # and instead the CONSTANTs fed in.
+            where_u_masks_for_const = [ U[0:16, 15], U[16:32, 14] ]
             
             # compute how constants are connected in the system.
             # The constant vector has size 16 and adds up to the Mblocks_input
-            ublock_const_output = np.hstack(const_masked)
+            ublock_const_output = np.hstack(where_u_masks_for_const)
             self.constant = I.dot(C.dot(ublock_const_output * self.u_constant))
             
             # cut out the relevant lines in system, no transmission possible from Mout to Min.
-            for item in const_masked:
+            for item in where_u_masks_for_const:
                 item[:] = 0
             
             self.UCI = I.dot(C.dot(U))

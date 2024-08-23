@@ -28,12 +28,6 @@ sprott.connect(my, yz.a)                    # yz
 sprott.connect(mz, yz.b)
 
 
-print(sprott.to_ascii_art())
-
-
-import sys
-sys.exit(0)
-
 sim     = Simulation(sprott)                # Create simulation object
 t_final = 200
 
@@ -50,6 +44,6 @@ plt.plot(z_out, x_out)                     # Create a phase space plot.
 #plt.plot(x_out)
 #plt.plot(y_out)
 #plt.plot(z_out)
-#plt.show()                                  # Display the plot.
+plt.show()                                  # Display the plot.
 
 

@@ -37,12 +37,13 @@ def test_constant_detection_in_simulation():
     const.use_constant()
     # constant from clane=14 -> DO end up in 16<=lanes<32
     # constant from clane=15 -> DO end up in  0<=lanes<16
-    const.add( Route(14, 0, 0.1, 0) ) # must work
-    const.add( Route(14,16, 0.2, 1) ) # must not work
-    const.add( Route(15,17, 0.3, 2) ) # must work
-    const.add( Route(15, 2, 0.4, 1) ) # must not work
+    const.add( Route(14, 0, 0.1, 0) ) # must not work
+    const.add( Route(14,16, 0.2, 1) ) # must work
+    const.add( Route(15,17, 0.3, 2) ) # must not work
+    const.add( Route(15, 2, 0.4, 3) ) # must work
     sim = Simulation(const)
-    assert all(sim.constant[0:4] == [0.1, 0, 0.3, 0 ])
+    print(sim.constant)
+    assert all(sim.constant[0:4] == [ 0., 0.2, 0., 0.4])
     
 def do_NOT_YET_test_measure_acl_constant():
     coeff0 = -0.5

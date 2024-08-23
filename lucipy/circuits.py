@@ -905,7 +905,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         config = self.generate(**args)
         return json.dumps(config)
         
-    def to_ascii_art(self):
+    def to_ascii_art(self, full_Cblock=False):
         """
         Creates an "ASCII art" of the LUCIDAC including the current configuration.
         
@@ -915,35 +915,34 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         
         - ACL IN/OUT
         - Constant givers
-        - ADC configuration
-        
+      
         """
         
         # The implementation/code for this method stems from the C libsim and thus may look
         # a bit awkward in python.
         
-        nl = "\n"
-        
         import numpy as np
         U, C, I = self.to_dense_matrices()
         U = U.T
             
-        dump = "LuciPy LUCIDAC ASCII Dump      +--[ UBlock ]------------------------+\n" + \
-               "+-[ M0 = MIntBlock ]-----+     |  0123456789abcdef0123456789abcdef  |\n"
+        dump = "LuciPy LUCIDAC ASCII Dump      +--[ UBlock ]----------------------+\n" + \
+               "+-[ M0 = MIntBlock ]-----+     | 0123456789abcdef0123456789abcdef |\n"
             
         for i in range(8):
             log10k0 = np.log10(self.k0s[i])
             assert log10k0 == int(log10k0)
             dump += "| INT%ld IC=%+.2f  k0=10^%d |" % (i, self.ics[i], log10k0);
-            dump += " --> " if np.any(U[i,:]) else "  .  "
-            dump += "%02lX " % i
+            u_clane_used = np.any(U[i,:])
+            c = "A" if i in self.adc_channels else ("-" if u_clane_used else ".")
+            dump += f" -{c}> " if u_clane_used else f"  {c}  "
+            dump += "%lX " % i
             
             # U Block upper
             dump += "".join("X" if U[i,j] else "." for j in range(32))
             
-            dump += " %02lX\n" % i
+            dump += " %lX\n" % i
             
-        dump += "+-[ M2 =  MulBlock ]-----+\n"
+        dump += "+-[ M1 =  MulBlock ]-----+\n"
             
         for i in range(8):
             muli, ab = "MUL%ld" % (i/2), "a" if i%2==0 else "b"
@@ -953,52 +952,56 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
                 dump += "| %s.%s                 |" % (muli, ab)
             
             # U Block lower
-            dump += " --> " if np.any(U[i+8,:]) else "  .  "
-            dump += "%02lX " % (i+8)
+            u_clane_used = np.any(U[i+8,:])
+            c = "A" if i in self.adc_channels else ("-" if u_clane_used else ".")
+            dump += f" -{c}> " if u_clane_used else f"  {c}  "
+            dump += "%lX " % (i+8)
             dump += "".join("X" if U[i+8,j] else "." for j in range(32))
-            dump += " %02lX\n" % (i+8)
+            dump += " %lX\n" % (i+8)
 
         Uout1 = "".join("v" if np.any(U[:,j]) else "-" for j in range(32))
         #Uout2 = "".join("v" if np.any(U[:,j]) else "" for j in range(32))
 
-        dump += f"+------------------------+      +-{Uout1}--+\n";
+        dump += f"+------------------------+     +-{Uout1}-+\n";
         #dump += f"                                  {Uout2}\n";
         dump += "\n"
+        
+        dump += "                               +--[ CBlock ]----------------------+\n" + \
+                "                               | 0123456789abcdef0123456789abcdef |\n"
             
         # Dumping the c block (up to 80 chars width)
         Cwhite = " "*34 # place of M blocks
-        dump += Cwhite
-        dump += "".join("|" if C[i,i] else " " for i in range(32))
-        dump += "+-[CBlock]-----+\n"
-            
+        dump += Cwhite + "\n"
+        #dump += "".join("v" if C[i,i] else " " for i in range(32))
+
         for i in range(32):
             factor = C[i,i]
-            if factor == 0:
+            if not full_Cblock and factor == 0:
                 continue
             dump += Cwhite
-            dump += "".join(("0" if j==i else "|") if factor else " " for j in range(32) )
-            dump += "| C%02ld = %+02.3f |" % (i, factor)
+            dump += "".join(("X" if j==i else ("|" if np.diag(C)[j]!=0 else ".")) if factor else "." for j in range(32) )
+            dump += " C%02ld = %+02.3f " % (i, factor)
             dump += "\n"
             
         dump += Cwhite
         dump += " "*32; # cblock->factor[i] ? "|" : " ";
-        dump += "+--------------+\n"
+        dump += "\n" #dump += "+--------------+\n"
             
             
-        dump += "                               +--[ IBlock ]------------------------+\n" + \
-                "+-[ M1 = MIntBlock ]-----+     |  0123456789abcdef0123456789abcdef  |\n"
+        dump += "                               +--[ IBlock ]----------------------+\n" + \
+                "+-[ M0 = MIntBlock ]-----+     | 0123456789abcdef0123456789abcdef |\n"
             
         for i in range(8):
             # M0 block
             dump += "|                   INT%ld |" % i
             dump += " <-- " if np.any(I[i,:]) else "  .  "
-            dump += "%02lX " % i
+            dump += "%lX " % i
             
             # I block upper
             dump += "".join("X" if I[i,j] else "." for j in range(32))
-            dump += " %02lX\n" % i
+            dump += " %lX\n" % i
             
-        dump += "+-[ M2 =  MulBlock ]-----+\n"
+        dump += "+-[ M1 =  MulBlock ]-----+\n"
             
         for i in range(8):
             # M1 block
@@ -1007,11 +1010,11 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
 
             # I Block lower
             dump += " <-- " if np.any(I[i+8,:]) else "  .  "
-            dump += "%02lX " % (i+8)
+            dump += "%lX " % (i+8)
             dump += "".join("X" if I[i+8,j] else "." for j in range(32))
-            dump += " %02lX\n" % (i+8)
+            dump += " %lX\n" % (i+8)
         
-        dump += "+---------------------+\n"
+        dump += "+------------------------+     +----------------------------------+\n"
 
         return dump
     
