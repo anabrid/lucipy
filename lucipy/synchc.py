@@ -347,19 +347,20 @@ class LUCIDAC:
         
         if register_methods:
             self.register_methods(self.commands, self.memoizable)
-        
-    def register_methods(self, commands, memoizable=[], overwrite=False):
+    
+    @classmethod
+    def _register_methods(cls, commands, memoizable=[], overwrite=False):
         """
         register method shorthands. Typically this method is only used by __init__.
         """
         for cmd in commands:
             shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
-            shorthand.__doc__ = f'Shorthand for query("{cmd}", msg)'
-            shorthand = types.MethodType(shorthand, self) # bind function
+            shorthand.__doc__ = f'Shorthand for ``query("{cmd}", msg)``, see :meth:`query`.'
+            #shorthand = types.MethodType(shorthand, self) # bind function
             if cmd in memoizable:
                 shorthand = functools.cache(shorthand)
-            if not hasattr(self, cmd) or overwrite:
-                setattr(self, cmd, shorthand)
+            if not hasattr(cls, cmd) or overwrite:
+                setattr(cls, cmd, shorthand)
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"
@@ -624,6 +625,8 @@ class LUCIDAC:
         minions: type LUCIDAC
         """
         return LUCIGroup(self, *minions)
+
+LUCIDAC._register_methods(LUCIDAC.commands)
 
 class LUCIGroup:
     """
