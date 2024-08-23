@@ -711,7 +711,8 @@ class Routing:
             eqs = [ eq.subs(mappings) for eq in eqs]
             
         return [ eq for eq in eqs if eq.rhs != 0 ]
-    
+
+
     def reverse(self):
         """
         Trivially "reverse engineer" a circuit based on routes
@@ -793,7 +794,7 @@ class Probes:
         if any(filter(notNone, self.adc_channels)):
             print("adc_channels -> ", self.adc_channels)
             # TODO: Probably check again with the Nones.
-            if not all(isinstance(v, int) for v in self.adc_channels):
+            if not all(isinstance(v, int) or v == None for v in self.adc_channels):
                 raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
             ret["adc_channels"] = self.adc_channels
         return ret
@@ -863,7 +864,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         Routing.randomize(self, num_lanes, max_coeff, seed)
         return self
     
-    def generate(self):
+    def generate(self, skip=None):
         """
         Returns the data structure required by the LUCIDAC set_config call *for a given carrier*,
         i.e. usage is like 
@@ -875,6 +876,8 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
                 "config": circuit.generate()
             }
             hc.query("set_config", outer_config)
+        
+        :arg skip: An entity to skip, for instance "/M1"
         """
         cluster_config = Routing.generate(self)
         cluster_config["/M0"] = MIntBlock.generate(self) 
@@ -886,11 +889,132 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         # send constant configuration regardless of it's value, because
         # False and None are also valid.s
         cluster_config["/U"]["constant"] = self.u_constant
+        
+        if skip:
+            cluster_config = { k:v for k,v in cluster_config.items() if not skip in k }
             
         return cluster_config 
         
-    def write(self, hc):
-        hc.set_circuit(self.generate())
+    def write(self, hc, **args):
+        "Shorthand to write out configuration to hybrid controller"
+        hc.set_circuit(self.generate(**args))
+
+    def to_json(self, **args):
+        "Shorthand to get JSON. Typically you don't need this"
+        import json
+        config = self.generate(**args)
+        return json.dumps(config)
+        
+    def to_ascii_art(self):
+        """
+        Creates an "ASCII art" of the LUCIDAC including the current configuration.
+        
+        Includes: U, C, I, Mblock configuration
+        
+        Does not yet include:
+        
+        - ACL IN/OUT
+        - Constant givers
+        - ADC configuration
+        
+        """
+        
+        # The implementation/code for this method stems from the C libsim and thus may look
+        # a bit awkward in python.
+        
+        nl = "\n"
+        
+        import numpy as np
+        U, C, I = self.to_dense_matrices()
+        U = U.T
+            
+        dump = "LuciPy LUCIDAC ASCII Dump      +--[ UBlock ]------------------------+\n" + \
+               "+-[ M0 = MIntBlock ]-----+     |  0123456789abcdef0123456789abcdef  |\n"
+            
+        for i in range(8):
+            log10k0 = np.log10(self.k0s[i])
+            assert log10k0 == int(log10k0)
+            dump += "| INT%ld IC=%+.2f  k0=10^%d |" % (i, self.ics[i], log10k0);
+            dump += " --> " if np.any(U[i,:]) else "  .  "
+            dump += "%02lX " % i
+            
+            # U Block upper
+            dump += "".join("X" if U[i,j] else "." for j in range(32))
+            
+            dump += " %02lX\n" % i
+            
+        dump += "+-[ M2 =  MulBlock ]-----+\n"
+            
+        for i in range(8):
+            muli, ab = "MUL%ld" % (i/2), "a" if i%2==0 else "b"
+            if i < 4:
+                dump += "| %s.%s        MUL%ld.out |" % (muli, ab, i)
+            else:
+                dump += "| %s.%s                 |" % (muli, ab)
+            
+            # U Block lower
+            dump += " --> " if np.any(U[i+8,:]) else "  .  "
+            dump += "%02lX " % (i+8)
+            dump += "".join("X" if U[i+8,j] else "." for j in range(32))
+            dump += " %02lX\n" % (i+8)
+
+        Uout1 = "".join("v" if np.any(U[:,j]) else "-" for j in range(32))
+        #Uout2 = "".join("v" if np.any(U[:,j]) else "" for j in range(32))
+
+        dump += f"+------------------------+      +-{Uout1}--+\n";
+        #dump += f"                                  {Uout2}\n";
+        dump += "\n"
+            
+        # Dumping the c block (up to 80 chars width)
+        Cwhite = " "*34 # place of M blocks
+        dump += Cwhite
+        dump += "".join("|" if C[i,i] else " " for i in range(32))
+        dump += "+-[CBlock]-----+\n"
+            
+        for i in range(32):
+            factor = C[i,i]
+            if factor == 0:
+                continue
+            dump += Cwhite
+            dump += "".join(("0" if j==i else "|") if factor else " " for j in range(32) )
+            dump += "| C%02ld = %+02.3f |" % (i, factor)
+            dump += "\n"
+            
+        dump += Cwhite
+        dump += " "*32; # cblock->factor[i] ? "|" : " ";
+        dump += "+--------------+\n"
+            
+            
+        dump += "                               +--[ IBlock ]------------------------+\n" + \
+                "+-[ M1 = MIntBlock ]-----+     |  0123456789abcdef0123456789abcdef  |\n"
+            
+        for i in range(8):
+            # M0 block
+            dump += "|                   INT%ld |" % i
+            dump += " <-- " if np.any(I[i,:]) else "  .  "
+            dump += "%02lX " % i
+            
+            # I block upper
+            dump += "".join("X" if I[i,j] else "." for j in range(32))
+            dump += " %02lX\n" % i
+            
+        dump += "+-[ M2 =  MulBlock ]-----+\n"
+            
+        for i in range(8):
+            # M1 block
+            muli, ab = "MUL%ld" % (i/2),  "a" if i%2==0 else "b"
+            dump += "|                 %s.%s |" % (muli, ab)
+
+            # I Block lower
+            dump += " <-- " if np.any(I[i+8,:]) else "  .  "
+            dump += "%02lX " % (i+8)
+            dump += "".join("X" if I[i+8,j] else "." for j in range(32))
+            dump += " %02lX\n" % (i+8)
+        
+        dump += "+---------------------+\n"
+
+        return dump
+    
         
     def to_pybrid_cli(self):
         nl = "\n"
