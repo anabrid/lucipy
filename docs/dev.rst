@@ -34,10 +34,19 @@ Documentation
 We are using the `Sphinx Documentation <https://www.sphinx-doc.org/>`_ system. You are invited to contribute
 documentation.
 
+Versioning
+----------
+
+We basically use `semantic versioning <https://semver.org/>`_ but for lazy people. This means we only
+use *minor* and *major*. Instead, the *patch* version is determined automatically from the distance of the
+current commit to the last tagged version. This is obviously not a good idea if branches are used, but in
+this case people should just use the last stable minor version such as ``1.2.0``, ``1.3.0``, etc. instead
+of ``1.2.14`` or ``1.3.77``.
+
 Code Deployment
 ---------------
 
-The package is released at the Python package index manually in the moment.
+The package is released at the Python package index manually in the moment, by invoking ``make dist``.
 
 Continous Integration
 ---------------------
