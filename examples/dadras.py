@@ -36,7 +36,7 @@ d.connect(yz, mx, weight = 5.4)
 
 d.connect(my, my, weight = -0.17)
 d.connect(xz, my, weight = -2)
-d.connect(mz, my, weight = -1)
+d.connect(mz, my, weight = -0.1)
 
 d.connect(xy, mz, weight = 4)
 d.connect(mz, mz, weight = 0.9)
