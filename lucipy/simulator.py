@@ -301,7 +301,7 @@ class Simulation:
         >>> ramp  = e.int(ic = -1)  # makes an Integrator
         >>> const = e.const()       # makes a  Constant giver
         >>> e.connect(const, ramp, weight = 0.1)
-        Route(uin=4, lane=0, coeff=0.1, iout=8)
+        Route(uin=14, lane=16, coeff=0.1, iout=0)
         >>> result = Simulation(e).solve_ivp(500)
         >>> ramp_result = result.y[0] # unpack the first integrator output
         >>> plt.plot(result.t, ramp_result) # plot against solution times     # doctest: +SKIP

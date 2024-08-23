@@ -109,9 +109,9 @@ class DefaultLUCIDAC:
         A factory for the actual elements.
     
         >>> DefaultLUCIDAC().make(Int, 1)
-        Int(id=1, out=9, a=9)
+        Int(id=1, out=1, a=1)
         >>> DefaultLUCIDAC().make(Mul, 3)
-        Mul(id=3, out=3, a=6, b=7)
+        Mul(id=3, out=11, a=14, b=15)
         """
         if t == Int:
             return Int(idx, cls.MIntOffset+idx, cls.MIntOffset+idx)
@@ -253,8 +253,10 @@ def Connection(source:Union[Ele,int], target:Union[Ele,int], weight=1):
 
     >>> r = Reservoir()
     >>> I1, M1 = r.int(), r.mul()
-    >>> Connection(M1.a, I1)
-    Route(uin=0, lane=None, coeff=1, iout=8) # likely wrong
+    >>> Connection(M1.a, I1.out)
+    Route(uin=8, lane=None, coeff=1, iout=0)
+    >>> Connection(M1, I1)
+    Route(uin=Mul(id=0, out=8, a=8, b=9), lane=None, coeff=1, iout=Int(id=0, out=0, a=0))
 
     """
     return Route(source, None, weight, target)
@@ -293,11 +295,22 @@ class MIntBlock:
         }
 
     def load(self, config):
+        """
+        Inverts what :meth:`generate` is doing.
+    
+        >>> b = MIntBlock()
+        >>> b.randomize()
+        >>> config = b.generate()
+        >>> c = MIntBlock()
+        >>> c.load(config)
+        >>> assert b.ics == c.ics
+        >>> assert b.k0s == c.k0s
+        """
         for idx, integrator in enumerate(config["elements"]):
             if "k" in integrator:
-                self.k0s[i] = integrator["k"]
+                self.k0s[idx] = integrator["k"]
             if "ic" in integrator:
-                self.ics[i] = integrator["ics"]
+                self.ics[idx] = integrator["ic"]
     
     def to_pybrid_cli(self):
         """
@@ -497,8 +510,50 @@ class Routing:
 
     def sanity_check(self, also_print=True):
         """
-        Checks for computing elements with more then one input whether either no input or
-        all are used.
+        Performs a number of plausibilty and sanity checks on the given circuit. These are:
+        
+        1. General data type check on the given routes (out of bounds, etc)
+        2. For computing elements with more then one input (currently only the multipliers):
+           Checks whether no input or all are used.
+        
+        :returns: A list of human readable messages as strings. Empty list means no warning.
+        
+        Examples on errnous circuits:
+        
+        >>> a = Circuit()
+        >>> a.route(17, -32, -24.0, None)
+        Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        >>> warnings_as_list = a.sanity_check()
+        Sanity check warning: Route contains None values.
+        Sanity check warning: Uin out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        Sanity check warning: Lane out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        Sanity check warning: Coefficient out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        Sanity check warning: Iout out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        
+        >>> b = Circuit()
+        >>> i = b.int()
+        >>> m = b.mul()
+        >>> b.connect(i, m.a)
+        Route(uin=0, lane=0, coeff=1, iout=8)
+        >>> warnigns_as_list = b.sanity_check()
+        Sanity check warning: Multiplier 0 has input but output is not used.
+        Sanity check warning: Warning: Multiplier 0 is in use but connection B is empty
+
+        There are a number of mis-uses which this checker cannot detect, by design. This
+        is, for example, when inputs and outputs are mixed up:
+        
+        >>> c = Circuit()
+        >>> correct0 = c.connect(i, m.a)
+        >>> correct1 = c.connect(i, m.b)
+        >>> errnous = c.connect(m.a, i.out)
+        >>> c.sanity_check() == []
+        True
+
+        The reason for this is because in this example, the explicit member access ``m.a`` or
+        ``i.out`` resolves to integers and the checker cannot find out whether the indices where
+        given intentionally or by accident.
+
+
         """
         warnings = []
         
@@ -585,19 +640,20 @@ class Routing:
         self.sanity_check()
         return "\n".join(f"route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
     
-    def to_dense_matrix(self):
+    def to_dense_matrix(self, skip_sanity_check=False):
         """
         Generates a dense numpy matrix for the UCI block, i.e. a real-valued 16x16 matrix with
         bounded values [-20,20] where at most 32 entries are non-zero.
         """
+        if not skip_sanity_check:
+            self.sanity_check()
         import numpy as np
-        self.sanity_check()
         UCI = np.zeros((16,16))
         for (uin, _lane, coeff, iout) in self.routes:
             UCI[iout,uin] += coeff
         return UCI
     
-    def to_dense_matrices(self, ui_dtype=bool) -> UCI:
+    def to_dense_matrices(self, ui_dtype=bool, skip_sanity_check=False) -> UCI:
         """
         Generates the three matrices U, C, I as dense numpy matrices.
         
@@ -613,11 +669,12 @@ class Routing:
         
         >>> import numpy as np
         >>> c = Circuit().randomize()
-        >>> U, C, I = c.to_dense_matrices()
-        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix())
+        >>> U, C, I = c.to_dense_matrices(skip_sanity_check=True) # skipping for doctesting
+        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix(skip_sanity_check=True))
         True
         """
-        self.sanity_check()
+        if not skip_sanity_check:
+            self.sanity_check()
         import numpy as np
         U = np.zeros((32,16), dtype=ui_dtype)
         C = np.zeros((32,32))
