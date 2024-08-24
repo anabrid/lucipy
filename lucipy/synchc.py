@@ -312,7 +312,7 @@ class LUCIDAC:
     # it cheaper to call them repeatedly
     memoizable = "sys_ident".split()
     
-    def __init__(self, endpoint_url=None, auto_reconnect=True, register_methods=True):
+    def __init__(self, endpoint_url=None, auto_reconnect=True):
         if not endpoint_url:
             if self.ENDPOINT_ENV_NAME in os.environ:
                 endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
@@ -344,23 +344,6 @@ class LUCIDAC:
             sample_op_end = True,
             sample_rate = 500_000,
         )
-        
-        if register_methods:
-            self.register_methods(self.commands, self.memoizable)
-    
-    @classmethod
-    def _register_methods(cls, commands, memoizable=[], overwrite=False):
-        """
-        register method shorthands. Typically this method is only used by __init__.
-        """
-        for cmd in commands:
-            shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
-            shorthand.__doc__ = f'Shorthand for ``query("{cmd}", msg)``, see :meth:`query`.'
-            #shorthand = types.MethodType(shorthand, self) # bind function
-            if cmd in memoizable:
-                shorthand = functools.cache(shorthand)
-            if not hasattr(cls, cmd) or overwrite:
-                setattr(cls, cmd, shorthand)
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"
@@ -448,25 +431,30 @@ class LUCIDAC:
             else:
                 raise e
     
-    def set_config(self, config):
+    def set_config(self, carrier_config):
         """
-        config being something like ``dict("/U": ..., "/C": ...)``, i.e. the entities
-        for a single cluster. There is only one cluster in LUCIDAC.
+        This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
+        in particular the :func:`~lucipy.circuits.Circuit.generate` method can help to
+        produce these configuration data structures.
         
-        .. warning::
+        Typically a configuration looks a bit like ``{"/0": {"/U": [....], "/C":[....], ...}}``,
+        i.e. the entities for a single cluster. There is only one cluster in LUCIDAC.
+        
+        .. note::
         
            This also determines the ideal IC time *if* that has not been set
            before (either manually or in a previous run).
         """
-        cluster_index = 0
         outer_config = {
-            "entity": [self.get_mac(), str(cluster_index)],
-            "config": config
+            "entity": [self.get_mac()], # str(cluster_index)], # was "0", NOT "/0"
+            "config": carrier_config
         }
         #print(outer_config)
-        
-        if "/M0" in config and not "ic_time" in self.run_config:
-            self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(config["/M0"])
+
+        if "/0" in carrier_config:
+            cluster_config = carrier_config["/0"]
+            if "/M0" in cluster_config and not "ic_time" in self.run_config:
+                self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(cluster_config["/M0"])
         
         return self._set_config_rev0_or_1(outer_config)
         
@@ -491,7 +479,8 @@ class LUCIDAC:
         .. note::
         
            Note that the path typically does NOT include something like "/C" or "/M0"
-           but rather "C" or "M0".
+           but rather "C" or "M0". In contrast, slash-prefixed entitiy names happen
+           to take place only in the configuration dictionary.
         
         Example:
         
@@ -564,7 +553,7 @@ class LUCIDAC:
         self.daq_config.sample_op_end = sample_op_end
         
         if not sample_rate in self.allowed_sample_rates:
-            raise ValueError(f"{sample_rate=} not allowed. Only values allowed from the following list: {allowed_sample_rates}")
+            raise ValueError(f"{sample_rate=} not allowed. Firmware supports only values from the following list: {self.allowed_sample_rates}")
         
         self.daq_config.sample_rate = sample_rate
        
@@ -626,7 +615,14 @@ class LUCIDAC:
         """
         return LUCIGroup(self, *minions)
 
-LUCIDAC._register_methods(LUCIDAC.commands)
+for cmd in LUCIDAC.commands:
+    shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
+    shorthand.__doc__ = f'Shorthand for ``query("{cmd}", msg)``, see :meth:`query`.'
+    #shorthand = types.MethodType(shorthand, self) # bind function
+    if cmd in LUCIDAC.memoizable:
+        shorthand = functools.cache(shorthand)
+    if not hasattr(LUCIDAC, cmd):
+        setattr(LUCIDAC, cmd, shorthand)
 
 class LUCIGroup:
     """

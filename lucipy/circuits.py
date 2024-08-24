@@ -302,7 +302,8 @@ class MIntBlock:
         >>> b.randomize()
         >>> config = b.generate()
         >>> c = MIntBlock()
-        >>> c.load(config)
+        >>> c.load(config) == c # chainable
+        True
         >>> assert b.ics == c.ics
         >>> assert b.k0s == c.k0s
         """
@@ -311,6 +312,7 @@ class MIntBlock:
                 self.k0s[idx] = integrator["k"]
             if "ic" in integrator:
                 self.ics[idx] = integrator["ic"]
+        return self
     
     def to_pybrid_cli(self):
         """
@@ -481,7 +483,34 @@ class Routing:
     
     @staticmethod
     def input2output(inmat, keep_arrays=True):
-        "Maps Array<int,32> onto Array<Array<int>|int, 16>"
+        """
+        Input/Output centric format conversion. Relevant only for C block.
+        Maps ``Array<int|None,32>`` onto ``Array<Array<int>|int, 16>``.
+        
+        Example:
+        
+        >>> iouts_inputs = [ r.iout for r in Routing().randomize(seed=37311).routes ]
+        >>> print(iouts_inputs)
+        [7, 5, 2, 9, 2, 15, 7, 1, 5, 7, 6, 1, 5, 0, 10, 7, 13, 3, 9, 9, 10, 1, 9, 2, 1, 7, 12, 8, 10, 10, 1, 3]
+        >>> Routing.input2output(iouts_inputs) # doctest: +NORMALIZE_WHITESPACE
+        [[13],
+         [7, 11, 21, 24, 30],
+         [2, 4, 23],
+         [17, 31],
+         [],
+         [1, 8, 12],
+         [10],
+         [0, 6, 9, 15, 25],
+         [27],
+         [3, 18, 19, 22],
+         [14, 20, 28, 29],
+         [],
+         [26],
+         [16],
+         [],
+         [5]]
+
+        """
         output = [[] for _ in range(16)] # Array<Array, 16>
         for lane, clane in enumerate(inmat):
             if clane != None:
@@ -494,12 +523,25 @@ class Routing:
     
     @staticmethod
     def output2input(outmat):
-        "Maps Array<Array<int>|int,16> onto Array<int,32>"
+        """
+        Input/Output centric format conversion. Relevant only for C block.
+        Maps ``Array<Array<int>|int,16>`` onto ``Array<int|None,32>``.
+        
+        This is obviously the inverse of ``input2output``:
+        
+        >>> iouts_inputs  = [ r.iout for r in Routing().randomize(seed=75164).routes ]
+        >>> iouts_outputs = Routing.input2output(iouts_inputs)
+        >>> again_inputs  = Routing.output2input(iouts_outputs)
+        >>> iouts_inputs == again_inputs
+        True
+        
+        :returns: List of size 32.
+        """
         input = [ None for _ in range(32) ]
         for clane, lanes in enumerate(outmat):
             if lanes:
                 for lane in lanes:
-                    input[clane] = clane
+                    input[lane] = clane
         return input
     
     @staticmethod
@@ -605,33 +647,62 @@ class Routing:
 
         return warnings
 
-    def generate(self):
+    def generate(self, sanity_check=True):
         """
-        Generate the configuration data structure required by the protocol, which is
+        Generate the configuration data structure required by the JSON protocol, which is
         that "output-centric configuration".
+        
+        Note that C-Matrix values here are correctly scaled.
         """
         
-        self.sanity_check()
+        if sanity_check:
+            self.sanity_check()
         
         U,C,I = self.routes2input()
         upscaling, scaled_c = self.coeff_upscale(C)
+        
         return {
-            "/U": dict(outputs = U),
+            "/U": dict(outputs = U, constant = self.u_constant),
             "/C": dict(elements = scaled_c),
             "/I": dict(outputs = self.input2output(I), upscaling = upscaling)
         }
         # TODO: Ublock Altsignals, where in REV1?
         # ret["/U"]["alt_signals"] = [False]*8
         
-    def load(self, config):
+    def load(self, cluster_config):
+        """
+        The inverse of generate.
+        
+        >>> a = Routing().randomize()
+        >>> b = Routing().load(a.generate(sanity_check=False))
+        >>> a.routes == b.routes
+        True
+        
+        """
         # load all in output centric format
-        U = config["/U"] if "/U" in config else [ None ]*32
-        C = config["/C"] if "/C" in config else [ 0.0  ]*32
-        I = config["/I"] if "/I" in config else [ None ]*16
+        U = cluster_config["/U"]["outputs"] if "/U" in cluster_config else [ None ]*32
+        C = cluster_config["/C"]["elements"] if "/C" in cluster_config else [ 0.0  ]*32
+        I = cluster_config["/I"]["outputs"] if "/I" in cluster_config else [ None ]*16
         I = self.output2input(I)
         
+        if "upscaling" in cluster_config["/I"]:
+            for i in range(32):
+                if cluster_config["/I"]["upscaling"][i]:
+                    C[i] *= 10
+        
+        if "constant" in cluster_config["/U"]:
+            self.use_constant(cluster_config["/U"]["constant"])
+        
         for lane,(u,c,i) in enumerate(zip(U,C,I)):
-            self.add(Route(u,lane,c,i))
+            if u == None:
+                continue
+            if i == None or i == []:
+                continue
+            if not isinstance(i, list):
+                i = [i]
+            for ii in i:
+                self.add(Route(u,lane,c,ii))
+        return self
     
     def to_pybrid_cli(self):
         """
@@ -640,12 +711,12 @@ class Routing:
         self.sanity_check()
         return "\n".join(f"route -- carrier/0 {r.uin:2d} {r.lane:2d} {r.coeff: 7.3f} {r.iout:2d}" for r in self.routes)
     
-    def to_dense_matrix(self, skip_sanity_check=False):
+    def to_dense_matrix(self, sanity_check=True):
         """
         Generates a dense numpy matrix for the UCI block, i.e. a real-valued 16x16 matrix with
         bounded values [-20,20] where at most 32 entries are non-zero.
         """
-        if not skip_sanity_check:
+        if sanity_check:
             self.sanity_check()
         import numpy as np
         UCI = np.zeros((16,16))
@@ -653,15 +724,11 @@ class Routing:
             UCI[iout,uin] += coeff
         return UCI
     
-    def to_dense_matrices(self, ui_dtype=bool, skip_sanity_check=False) -> UCI:
+    def to_dense_matrices(self, sanity_check=True) -> UCI:
         """
         Generates the three matrices U, C, I as dense numpy matrices.
+        C and I are properly scaled as in the real system (upscaling happens in I).
         
-        :arg ui_dtype: Data type for the U and I matrix. Naturally, this are
-          bitmatrices, so the default ``bool`` is a suitable choise. If you
-          prefer to look at numbers, say ``int`` or ``float`` instead.
-          Do not worry, numpy otherwise does the same arithmetics with booleans
-          as with integers.
         :returns: 3-Tuple of numpy matrices for U, C, I, in this order.
         
         Note that one way to reproduce :meth:`to_dense_matrix` is just by
@@ -669,21 +736,22 @@ class Routing:
         
         >>> import numpy as np
         >>> c = Circuit().randomize()
-        >>> U, C, I = c.to_dense_matrices(skip_sanity_check=True) # skipping for doctesting
-        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix(skip_sanity_check=True))
+        >>> U, C, I = c.to_dense_matrices(sanity_check=False) # skipping for doctesting
+        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix(sanity_check=False))
         True
         """
-        if not skip_sanity_check:
+        if sanity_check:
             self.sanity_check()
         import numpy as np
-        U = np.zeros((32,16), dtype=ui_dtype)
+        U = np.zeros((32,16))
         C = np.zeros((32,32))
-        I = np.zeros((16,32), dtype=ui_dtype)
+        I = np.zeros((16,32))
         
         for (uin, lane, coeff, iout) in self.routes:
+            assert not None in (uin, lane, iout), "Nones behave badly in numpy array subscription. Sanatize your routes."
             U[lane, uin]  = 1
-            C[lane, lane] = coeff
-            I[iout, lane] = 1
+            I[iout, lane] = 1 if abs(coeff) < 10 else 10
+            C[lane, lane] = coeff / I[iout, lane]
         
         return UCI(U,C,I)
 
@@ -843,6 +911,7 @@ class Probes:
         return adc_channel
         
     def generate(self):
+        "Returns carrier configuration, not cluster configuration"
         ret = {}
         if self.acl_select:
             #if not all(isinstance(v, bool) for v in self.acl_select):
@@ -855,6 +924,13 @@ class Probes:
                 raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
             ret["adc_channels"] = self.adc_channels
         return ret
+    
+    def load(self, config):
+        if "acl_select" in config:
+            self.acl_select = config["acl_select"]
+        if "adc_channels" in config:
+            self.adc_channels = config["adc_channels"]
+        return self
 
 class Circuit(Reservoir, MIntBlock, Routing, Probes):
     """
@@ -862,6 +938,9 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
     single-class interface. This allows it, for instance, to provide an improved version of
     the Reservoir's int() method which also sets the Int state in one go.
     It also can generate the final configuration format required for LUCIDAC.
+        
+    Note that for the ``Reservoir``, there will be no "backwards syncing", i.e. if routes are
+    added manually without using the Reservoir, it's bookkeeping is no more working.
     """
     
     def __init__(self, routes: List[Route] = []):
@@ -896,14 +975,15 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         """
         Loads the configuration which :meth:`generate` spills out. The full circle.
         """
-        config = config_message["config"] if "config" in config_message else config_message
-        config = config["/0"] if "/0" in config else config
+        config_carrier = config_message["config"] if "config" in config_message else config_message
+        Probes.load(self, config_carrier)
+        config_cluster = config_carrier["/0"] if "/0" in config_carrier else config_carrier
         
-        if "/M0" in config:
-            MIntBlock.load(config["/M0"])
-        
-        Routing.load(config)
-        # Probes.load(config)
+        if "/M0" in config_cluster:
+            MIntBlock.load(self, config_cluster["/M0"])
+        Routing.load(self, config_cluster)
+
+        return self
     
     def randomize(self, num_lanes=32, max_coeff=+10, seed=None):
         """
@@ -921,36 +1001,31 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         Routing.randomize(self, num_lanes, max_coeff, seed)
         return self
     
-    def generate(self, skip=None):
+    def generate(self, skip=None, sanity_check=True):
         """
         Returns the data structure required by the LUCIDAC set_config call *for a given carrier*,
-        i.e. usage is like 
-    
-        ::
-    
-            outer_config = {
-                "entity": ["04-E9-E5-16-09-92", "0"],
-                "config": circuit.generate()
-            }
-            hc.query("set_config", outer_config)
+        not cluster. The output of this function can be straightforwardly fed into ``LUCIDAC.set_circuit``.
         
-        :arg skip: An entity to skip, for instance "/M1"
+        The LUCIDAC cluster is always part of the carrier level configuration:
+        
+        >>> "/0" in Circuit().randomize().generate(sanity_check=False)
+        True
+        
+        :arg skip: An entity (within LUCIDAC) to skip, for instance "/M1"
+        :arg sanity_check: Whether to carry out a sanity check (results in printouts)
         """
-        cluster_config = Routing.generate(self)
+        cluster_config = Routing.generate(self, sanity_check=sanity_check)
         cluster_config["/M0"] = MIntBlock.generate(self) 
         cluster_config["/M1"] = {} # MMulBlock
         
-        # update with Carrier configuration
-        cluster_config.update(Probes.generate(self).items())
-        
-        # send constant configuration regardless of it's value, because
-        # False and None are also valid.s
-        cluster_config["/U"]["constant"] = self.u_constant
-        
         if skip:
             cluster_config = { k:v for k,v in cluster_config.items() if not skip in k }
-            
-        return cluster_config 
+
+        carrier_config = {}
+        carrier_config["/0"] = cluster_config
+        carrier_config.update(Probes.generate(self).items())
+
+        return carrier_config
         
     def write(self, hc, **args):
         "Shorthand to write out configuration to hybrid controller"

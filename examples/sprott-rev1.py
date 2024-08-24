@@ -56,7 +56,7 @@ hc.reset_circuit()
 
 # filter out M1 because there is nothing to set
 # and MCU complains if I try to configure something nonexisting
-config = { k: v for k,v in sprott.generate().items() if not "/M1" in k }
+config = sprott.generate(skip="/M1")
 
 print(config)
 

@@ -1,6 +1,6 @@
 # python internals
-import sys, socket, select, threading, socketserver, json, functools, \
-  operator, functools, time, datetime, copy
+import sys, os, socket, select, threading, socketserver, json, functools, \
+  operator, functools, time, datetime, copy, threading, multiprocessing
 
 """
 This package provides a simple Simulator for LUCIDAC which tries to align
@@ -25,6 +25,12 @@ def split(array, nrows, ncols):
     return (array.reshape(h//nrows, nrows, -1, ncols)
                  .swapaxes(1, 2)
                  .reshape(-1, nrows, ncols))
+
+def remove_trailing(l, remove_value=None):
+    i = len(l)
+    while i > 0 and l[i - 1] == remove_value:
+        i -= 1
+    return l[:i]
 
 
 class Simulation:
@@ -239,6 +245,7 @@ class Simulation:
                 adc_channels = self.adc_channels
             else:
                 raise ValueError("Must provide adc_channels, since the provided circuit defines none.")
+        adc_channels = remove_trailing(adc_channels, None)
         return self.mblocks_output(state)[adc_channels]
     
     def acl_out_values(self, state):
@@ -373,6 +380,14 @@ class Emulation:
     .. note::
        The error messages and codes returned by this emulator do not (yet) coincide with the
        error messages and codes from the real device.
+    
+    
+    .. note::
+        If you choose a forking server, the server can handle multiple clients a time
+        and is not "blocking" (the same way as the early real firmware embedded servers were).
+        However, the "parallel server" in a forking (=multiprocessing) model also means
+        that each client gets its own virtualized LUCIDAC due to the multiprocess nature (no
+        shared address space and thus no shared LUCIDAC memory model) of the server.
        
     """
     
@@ -413,14 +428,23 @@ class Emulation:
         
     @expose
     def reset(self):
-        "Resets the circuit configuration"
-        self.circuit = {'/0':  # <- cluster
-            {
+        """
+        Resets the circuit configuration.
+        As this models a LUCIDAC, the configuration holds a single cluster and some
+        parts (but currently we don't emulate front panel and friends).
+        """
+        self.circuit = {
+            "adc_channels": [],
+            "acl_select": ["internal"]*8,
+            '/0': {
                 '/M0': {'elements': [ {'ic': 0, 'k': 10000} for i in range(8) ], },
                 '/M1': {},
                 '/U': {'outputs': [ None for i in range (32) ] },
                 '/C': {'elements': [ 0 for i in range(32) ] },
-                '/I': {'outputs': [ None for i in range(16) ] }
+                '/I': {
+                    'outputs': [ None for i in range(16) ],
+                    "upscaling": [False]*32,
+                }
             }
         }
     
@@ -448,14 +472,29 @@ class Emulation:
     def set_config(self, entity, config):
         """
         Set circuit configuration.
+        
+        Somewhat ironically, as in real LUCIDAC, this function does not comply if
+        you try to set some nonexisting element. In the emulator, it just tries to
+        update the local configuration which does not distinguish between entities
+        and elements, anyway.
     
-        :arg entity: A list such as ["AA-BB-CC-DD-EE-FF", "/0", "/U"], i.e.
+        :arg entity: A list such as ["AA-BB-CC-DD-EE-FF", "0", "/U"], i.e.
            the path to the entity. As the real LUCIDAC, we reject wrong carrier
            messages.
         :arg config: The configuration to apply to the entity.
         """
         if entity[0] != self.mac:
             return {"error": "Configuration for wrong (emulated) carrier"}
+        if len(entity) == 1:
+            self.circuit = config # carrier root level
+            return
+        
+        # decorate things with slashes. Probably not very clever but at least
+        # makes "0" to "/0". The protocol is just insane or very bad documented...
+        # -> This will NOT work with carrier level settings!
+        for i,e in enumerate(entity):
+            if e[0] != "/":
+                entity[i] = "/"+entity[i]
         try:
             parent = find(entity[1:-1], self.circuit)
             child_key = entity[-1]
@@ -485,7 +524,7 @@ class Emulation:
     
     #@expose("out-of-band")
     @expose
-    def start_run(self, start_run_msg):
+    def start_run(self, **start_run_msg):
         """
         Emulate an actual run with the LUCIDAC Run queue and FlexIO data aquisition.
         This will return the ADC measurements on the requested sampling points.
@@ -543,18 +582,20 @@ class Emulation:
         # the acknowledgement of the actual run query
         reply_envelopes.append({"type": "start_run", "msg": {} })
         
-        from circuits import Circuit
+        from .circuits import Circuit
         circuit = Circuit().load(self.circuit)
+        print(circuit)
+        print(f"{t_final_sec=} {t_final_sec=} {samples_per_second=} {num_samples=} {sampling_times.shape=}")
         sim = Simulation(circuit, realtime=True)
         res = sim.solve_ivp(t_final_sec, dense_output=True)
         states_sampled = res.sol(sampling_times).T
-        assert states_samples.shape == (num_samples, 8)
+        assert states_sampled.shape == (num_samples, 8)
         
-        adc_samples = [sim.adc_values(state) for state in states_samples]
+        adc_samples = [sim.adc_values(state) for state in states_sampled]
         
         # Simulate a finite buffer
         typical_buffer_size_elements = 100
-        num_messages = int(adc_samples.size / typical_buffer_size_elements)
+        num_messages = int(len(adc_samples) / typical_buffer_size_elements)
         chunks = np.array_split(adc_samples, num_messages)
         for chunk in chunks:
             reply_envelopes.append({
@@ -639,6 +680,12 @@ class Emulation:
                         ret["msg"] = outcome
                 except Exception as e:
                     print(f"Exception at handling {envelope=}: ", e)
+                    # fancy debugging:
+                    import sys, traceback, pdb
+                    extype, value, tb = sys.exc_info()
+                    traceback.print_exc()
+                    pdb.post_mortem(tb)
+                    # end of fancy debugging
                     ret["msg"] = {"error": f"Error captured by handle_request(): {type(e).__name__}: {e}" }
             else:   
                 ret["msg"] = {'error': "Don't know this message type"}
@@ -650,7 +697,7 @@ class Emulation:
     def __init__(self, bind_addr="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
         """
         :arg bind_addr: Adress to bind to, can also be a hostname. Use "0.0.0.0" to listen on all interfaces.
-        :art bind_port: TCP port to bind to
+        :art bind_port: TCP port to bind to. Use ``0`` to let the Operating System find a free port.
         """
         self.mac = emulated_mac
         self.reset()
@@ -684,32 +731,11 @@ class Emulation:
         
         self.addr = (bind_addr, bind_port)
         self.handler_class = TCPRequestHandler
-    
-    def serve_forever(self, forking=False):
-        """
-        Hand over control to the socket server event queue.
-    
-        .. note::
-            If you choose a forking server, the server can handle multiple clients a time
-            and is not "blocking" (the same way as the early real firmware embedded servers were).
-            However, the "parallel server" in a forking (=multiprocessing) model also means
-            that each client gets its own virtualized LUCIDAC due to the multiprocess nature (no
-            shared address space and thus no shared LUCIDAC memory model) of the server.
-    
-        :param forking: Choose a forking server model
-        """
         
-        if forking:
-            class TCPServer(socketserver.ForkingMixIn, socketserver.TCPServer):
-                pass
-        else:
-            class TCPServer(socketserver.TCPServer):
-                pass
-            
-        self.server = TCPServer(self.addr, self.handler_class)
-        
+    def _serve_forever(self):
         with self.server:
-            print(f"Lucipy LUCIDAC Mockup Server listening at {self.addr}, stop with CTRL+C")
+            self.obtained_addr = self.server.server_address
+            print(f"Lucipy LUCIDAC Mockup Server listening at {self.endpoint()} - stop with CTRL+C")
             try:
                 self.server.serve_forever()
             except KeyboardInterrupt:
@@ -719,6 +745,81 @@ class Emulation:
             except Exception as e:
                 print(f"Server crash: {e}")
                 return
-            
-            
+    
+    def serve_forking(self):
+        """
+        Starts TCP server in a seperate process. Furthermore, the TCP Server will fork for each incoming
+        connection, thus allowing multiple clients to connect at the same time. Since this distributed
+        memory model cannot exchange information, each client sees its own version of a LUCIDAC.
+        
+        Returns a ``multiprocessing.Process`` class which can be asked for the process id, waited for,
+        etc. Example:
+        
+        ::
+        
+            proc = emu.serve_forking()
+            print(f"Waiting for server {emu.endpoint()} process to finish, can also do other work")
+            proc.join()
+        
+        """
+        class TCPServer(socketserver.ForkingMixIn, socketserver.TCPServer):
+            pass
+        self.server = TCPServer(self.addr, self.handler_class)
+        self.obtained_addr = self.server.server_address
+        proc = multiprocessing.Process(target=self.server.serve_forever)
+        proc.start()
+        return proc
+    
+    def serve_threading(self):
+        """
+        Starts TCP server in a seperate thread. Furthermore, the TCP Server will reply to each incoming
+        connection in a seperate thread. Theoretically this could give each client a view to a common
+        hardware memory model (not taking into account locking etc.)
+        
+        Yields the running thread from a context manager, thus allows to continue work, also
+        with the thread as well as the Emulation object in main thread.
+        
+        ::
+        
+            emu = Emulation(bind_addr="0.0.0.0", bind_port=0)
+            thread = next(emu.serve_threading())
+            print(f"Waiting for server {emu.endpoint()} thread to finish, can also do other work")
+            thread.join()
+        
+        .. warning::
+        
+           There is still some bug here and the server started within a thread never responds.
+        """
+        class TCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+            pass
+        self.server = TCPServer(self.addr, self.handler_class)
+        
+        with self.server:
+            self.obtained_addr = self.server.server_address
+            thread = threading.Thread(target=self.server.serve_forever)
+            thread.daemon = True # exit when main thread terminates
+            thread.start()
+            print(f"Lucipy LUCIDAC Mockup Server started in background thread at {self.endpoint()}")
+            yield thread
+        
+        return self
+    
+    def serve_blocking(self):
+        """
+        Starts TCP server in main thread. This hands over control to the socket server event queue.
+        Only one client can connect at a time. The function will never return except user interaction.        
+        """
+        class TCPServer(socketserver.TCPServer):
+            pass
+        self.server = TCPServer(self.addr, self.handler_class)
+        self._serve_forever() # will never return except exception
+    
+    def endpoint(self):
+        """
+        Determines endpoint URL if some server has been started. Endpoints are Strings.
+        If a server has been started, this returns the actual Port assigned if port ``0`` was requested.
+        """
+        ip, port = self.obtained_addr if hasattr(self, "obtained_addr") else self.addr
+        return f"tcp://{ip}:{port}"
+
         
