@@ -16,5 +16,7 @@ jobs:
       pages: write
       id-token: write
     steps:
+    - id: install_deps
+      run: pip install nbsphinx
     - id: deployment
       uses: sphinx-notes/pages@v3
