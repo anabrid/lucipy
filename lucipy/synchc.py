@@ -206,7 +206,14 @@ def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tc
 
 
 class Run:
-    "Represents a running Run"
+    """
+    A run is a IC-OP-HALT sequence on a LUCIDAC with measurement (data aquisition with the analog-digital-converters)
+    ongoing during the OP phase. Therefore, a run generates data. This results in the remote site to send data "out of bounds",
+    i.e. without that we have requested these data. The job of this class is to proper model how to receive these data.
+    An instance of this class is returned by :meth:`LUCIDAC.start_run`. This instance is properly "handled off" by
+    calling :meth:`data` and then wiping it.
+    
+    """
     run_states = "DONE ERROR IC NEW OP OP_END QUEUED TAKE_OFF TMP_HALT".split()
     
     def __init__(self, hc):
@@ -229,24 +236,25 @@ class Run:
     
         This invariant is also asserted within the method.
         """
-        envelope = self.hc.sock.read()
-        if envelope["type"] == "run_data":
-            # TODO check for proper run id and entity.
-            msg_data = envelope["msg"]["data"]
-            assert all(self.hc.daq_config["num_channels"] == len(line) for line in msg_data)
-            yield msg_data
-        elif envelope["type"] == "run_state_change":
-            msg_old = envelope["msg"]["new"]
-            msg_new = envelope["msg"]["new"]
-            if msg_new == "DONE":
-                return # successfully transfered all data
-            if msg_new == "ERROR":
-                raise LocalError(f"Could not properly start the run. Most likely the DAQ ({self.hc.daq_config}) or RUN ({self.hc.run_config}) configuration not accepted by the server side.")
-            # Attention: After runstate stop there still can come a last data
-            #            package.
-        else:
-            raise LocalError(f"Run::slurp(): Unexpected message {envelope}")
-            #return # stop slurping
+        while True:
+            envelope = self.hc.sock.read()
+            if envelope["type"] == "run_data":
+                # TODO check for proper run id and entity.
+                msg_data = envelope["msg"]["data"]
+                assert all(self.hc.daq_config["num_channels"] == len(line) for line in msg_data)
+                yield msg_data
+            elif envelope["type"] == "run_state_change":
+                msg_old = envelope["msg"]["new"]
+                msg_new = envelope["msg"]["new"]
+                if msg_new == "DONE":
+                    break # successfully transfered all data
+                if msg_new == "ERROR":
+                    raise LocalError(f"Could not properly start the run. Most likely the DAQ ({self.hc.daq_config}) or RUN ({self.hc.run_config}) configuration not accepted by the server side.")
+                # Attention: After runstate stop there still can come a last data
+                #            package.
+            else:
+                raise LocalError(f"Run::slurp(): Unexpected message {envelope}")
+                #return # stop slurping
 
     def data(self) -> typing.List[float]:
         """
@@ -265,10 +273,7 @@ class Run:
     
         See also :meth:`next_data` and example application codes.
         """
-        ret = []
-        for lines in self.next_data():
-            ret += lines
-        return ret
+        return sum(self.next_data(), []) # joins lists at outer level
 
 class LUCIDAC:
     """
@@ -462,6 +467,18 @@ class LUCIDAC:
     def set_circuit(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
         return self.set_config(circuit)
+    
+    def set_circuit_alt(self, circuit):
+        # manually decompose /0
+        carrier_config = circuit
+        if "/0" in carrier_config:
+            self.query("set_circuit", {
+                "entity": [self.get_mac(), "0"],
+                "config": carrier_config["/0"]
+            })
+            del carrier_config["/0"]
+        self.set_circuit(carrier_config)
+        
     
     def set_by_path(self, path, config):
         """

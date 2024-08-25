@@ -28,9 +28,9 @@ print(sinus)
 
 hc = LUCIDAC()
 hc.reset_circuit()
-sinus.write(hc, skip="/M1")
 
-print(sinus.to_json(skip="/M1"))
+config = sinus.generate(skip="/M1")
+hc.set_circuit_alt(config)
 
 manual_control = False
 
@@ -43,6 +43,9 @@ else:
     sample_rate = 125_000
     hc.set_daq(num_channels=2, sample_rate=sample_rate)
     hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=900_000) # op time 0.9ms!
+    
+    # activate Non-FlexIO code
+    hc.run_config.no_streaming = True
 
     run = hc.start_run()
     data = array(run.data())
