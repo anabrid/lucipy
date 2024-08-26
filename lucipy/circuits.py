@@ -441,7 +441,10 @@ class Routing:
             if hasattr(iout, "b"):
                 # element with more then one input
                 raise ValueError(f"Please provide input port for {iout=} in {route}")
-            iout = iout.a
+            elif hasattr(iout, "a"):
+                iout = iout.a
+            else:
+                raise ValueError(f"Element has no inputs. Probably mixed up sinks and sources?")
 
         route = Route(uin, lane, coeff, iout)
         self.routes.append(route)
@@ -721,7 +724,8 @@ class Routing:
         import numpy as np
         UCI = np.zeros((16,16))
         for (uin, _lane, coeff, iout) in self.routes:
-            UCI[iout,uin] += coeff
+            if iout != self.do_not_connect:
+                UCI[iout,uin] += coeff
         return UCI
     
     def to_dense_matrices(self, sanity_check=True) -> UCI:
@@ -752,6 +756,8 @@ class Routing:
             U[lane, uin]  = 1
             I[iout, lane] = 1 if abs(coeff) < 10 else 10
             C[lane, lane] = coeff / I[iout, lane]
+            if iout == self.do_not_connect:
+                I[iout, lane] = 0
         
         return UCI(U,C,I)
 
@@ -917,7 +923,7 @@ class Probes:
             #if not all(isinstance(v, bool) for v in self.acl_select):
             #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
             ret["acl_select"] = self.acl_select
-        if any(filter(notNone, self.adc_channels)):
+        if len(list(filter(notNone, self.adc_channels))):
             print("adc_channels -> ", self.adc_channels)
             # TODO: Probably check again with the Nones.
             if not all(isinstance(v, int) or v == None for v in self.adc_channels):

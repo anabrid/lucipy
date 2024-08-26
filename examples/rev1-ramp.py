@@ -3,50 +3,33 @@
 from lucipy import LUCIDAC, Circuit, Route, Connection, Simulation
 from time import sleep
 
-ramp = Circuit()
-
-### Idee:
-###
-### Rampe in REV1 System hochintegrieren.
-
 # M0 = M-Block INT
 # M1 = M-Block MUL
 
-### attention, do not use rev1.int() and friends as this is still
-###     in REV0 numeration (where M1 and M0 are swapped)
 
-ramp.use_constant()
+ramp = Circuit()
 
-ramp.add( Route(15, 0, -1.0, 0) ) # const input to int
-ramp.set_ic(0, 0)
+integrator = 2
+ic = -1
+slope = +1
 
-acl_lane = 24 # first ACL lane
-sink = 10 # mul1a
-ramp.add( Route(0, 29, 1.0, sink) )
+i = ramp.int(id=integrator, ic=ic)
+c = ramp.const()
 
-print(ramp)
+ramp.connect(c, i, weight=slope)
 
-# the following works ONLY on a REV1
+ramp.probe(i, front_port=6)
+channel = ramp.measure(i)
+print(f"{channel=}")
 
 hc = LUCIDAC()
 print(hc)
 hc.reset_circuit()
 
-# filter out M1 because there is nothing to set
-# and MCU complains if I try to configure something nonexisting
-config = { k:v for k,v in ramp.generate().items() if not "/M1" in k }
-
+config = ramp.generate(skip="/M1")
 hc.set_config(config)
 
-"""
-# set all ACL channels to external
-hc.query("set_circuit", {"entity": [hc.get_mac() ], "config": {
-    "acl_select": [ "external" ]*8,
-    "adc_channels": [ 0 ],
-}})
-"""
-
-manual_control = True
+manual_control = False
 
 if manual_control:
     hc.manual_mode("ic")
@@ -55,8 +38,26 @@ if manual_control:
     sleep(1)
     hc.manual_mode("halt")
 else:
-    hc.set_daq(num_channels=2, sample_rate=125_000)
-    nonexisting_ic = 10 # ns, just not to confuse FlexIO. Current Integrators don't support IC ;-)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_000_000)
+    hc.set_daq(num_channels=1, sample_rate=125_000)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=200_000, no_streaming=True)
+    
+    from pylab import *
 
     run = hc.start_run()
+    data = array(run.data())
+    x_run = data.T[channel]
+    t_run = linspace(0, 2, len(x_run))
+    
+    sim = Simulation(ramp)
+    sim_data = sim.solve_ivp(2) # in units of k0...
+    x_sim = sim_data.y[i.id]
+    t_sim = sim_data.t
+    
+    #ion()
+    clf()
+    title(f"{len(data)} Punkte")
+    plot(t_run, x_run, "o-", label="Hardware")
+    plot(t_sim, x_sim, "o-", label="Simulation")
+    #plot(t_sim, -x_sim, "o-", label="-Simulation")
+    legend()
+    show()

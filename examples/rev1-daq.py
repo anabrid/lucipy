@@ -42,7 +42,7 @@ if manual_control:
 else:
     sample_rate = 125_000
     hc.set_daq(num_channels=2, sample_rate=sample_rate)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=900_000) # op time 0.9ms!
+    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_800_000) # op time 0.9ms!
     
     # activate Non-FlexIO code
     hc.run_config.no_streaming = True

@@ -256,7 +256,7 @@ class Run:
                 raise LocalError(f"Run::slurp(): Unexpected message {envelope}")
                 #return # stop slurping
 
-    def data(self) -> typing.List[float]:
+    def data(self, empty_is_fine=False) -> typing.List[float]:
         """
         Returns all measurement data (evolution data on the ADCs) during a run.
         
@@ -272,8 +272,18 @@ class Run:
         >>> plt.plot(x)                                      # doctest: +SKIP
     
         See also :meth:`next_data` and example application codes.
+        
+        :arg empty_is_fine: Whether to raise when no data have been aquired or
+           happily return an empty array. Raising a ``LocalError`` (i.e. the default
+           option) is most likely more what you want because you then don't have to
+           write error handling code for an empty array. Otherwise a later access on
+           something on  ``np.array(run.data())`` will most likely result in an
+           ``IndexError: index 0 is out of bounds for axis 0 with size 0`` or similar.
         """
-        return sum(self.next_data(), []) # joins lists at outer level
+        res = sum(self.next_data(), []) # joins lists at outer level
+        if len(res) == 0 and not empty_is_fine:
+            raise LocalError("Expected data stream but got not a single data point")
+        return res
 
 class LUCIDAC:
     """
@@ -425,17 +435,6 @@ class LUCIDAC:
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
-    def _set_config_rev0_or_1(self, outer_config):
-        # todo: Should determine before which is the correct call, for instance by
-        #       evaluating what help() returns.
-        try:
-            return self.query("set_config", outer_config)
-        except RemoteError as e:
-            if e.code == -10:
-                return self.query("set_circuit", outer_config)
-            else:
-                raise e
-    
     def set_config(self, carrier_config):
         """
         This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
@@ -461,7 +460,7 @@ class LUCIDAC:
             if "/M0" in cluster_config and not "ic_time" in self.run_config:
                 self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(cluster_config["/M0"])
         
-        return self._set_config_rev0_or_1(outer_config)
+        return self.query("set_circuit", outer_config)
         
     
     def set_circuit(self, circuit):
@@ -509,17 +508,17 @@ class LUCIDAC:
             "entity": [self.get_mac(), str(cluster_index)] + path,
             "config": config
         }
-        return self._set_config_rev0_or_1(outer_config)
+        return self.query("set_circuit", outer_config)
     
     def set_leds(self, leds_as_integer):
         # Cannot use set_circuit because it operates only on th Carrier
-        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
+        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
         
     def signal_generator(self, dac=None):
         """
         :args dac: Digital analog converter outputs, as there are two a list with two floats (normalized [-1,+1]) is expected
         """
-        return self._set_config_rev0_or_1({"entity": [self.get_mac(), "FP" ], "config": {
+        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": {
             "signal_generator":  { "dac_outputs": dac, "sleep": False }
         } })
     
@@ -581,6 +580,7 @@ class LUCIDAC:
             halt_on_overload = True,
             ic_time = None,
             op_time = None,
+            no_streaming = False,
             ):
         """
         :param halt_on_external_trigger: Whether halt the run if external input triggers
@@ -599,6 +599,7 @@ class LUCIDAC:
             self.run_config.ic_time = ic_time
         if op_time:
             self.run_config.op_time = op_time
+        self.run_config.no_streaming = no_streaming
         return self.run_config
 
     def start_run(self) -> Run:
