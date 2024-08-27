@@ -3,6 +3,7 @@
 from lucipy import LUCIDAC, Circuit, Route, Connection, Simulation
 from time import sleep 
 from pylab import *
+from itertools import product
 
 # M0 = M-Block INT
 # M1 = M-Block MUL
@@ -32,28 +33,26 @@ hc.reset_circuit()
 config = sinus.generate(skip="/M1")
 hc.set_circuit_alt(config)
 
-manual_control = False
-
-if manual_control:
-    hc.manual_mode("ic")
-    sleep(0.5)
-    hc.manual_mode("op")
-    sleep(0.5)
-else:
-    sample_rate = 125_000
-    hc.set_daq(num_channels=2, sample_rate=sample_rate)
+def run_with(op_time_us, sample_rate_per_sec):
+    hc.set_daq(num_channels=2, sample_rate=sample_rate_per_sec)
     hc.set_run(halt_on_overload=False, ic_time=200_000)
-    hc.set_op_time(us=900)
+    hc.set_op_time(us=op_time_us)
     
     # activate Non-FlexIO code
     #hc.run_config.no_streaming = True
+    
+    optime_ns = hc.run_config.op_time 
+    optime_us = optime_ns / 1000
+    optime_sec = optime_us / 1e6
+    expected_points = int(optime_sec * sample_rate_per_sec)
 
     run = hc.start_run()
-    data = array(run.data())
+    try:
+        data = array(run.data())
+    except:
+        return expected_points, 0, False
     
-    expected_points = int(hc.run_config.op_time/1e9 * sample_rate)
-    optime_us = hc.run_config.op_time / 1e3
-    optime_sec = hc.run_config.op_time / 1e9
+
     exactly_all = expected_points == len(data)
     if exactly_all:
         points = f"Alle {len(data)} Punkte"
@@ -71,7 +70,10 @@ else:
         np.allclose(x_sim, x_hw, atol=0.2, rtol=0.1) and \
         np.allclose(y_sim, y_hw, atol=0.2, rtol=0.1)
     
-    #ion()
+    return expected_points, len(data), correct
+
+    ion()    
+    figure()
     clf()
     title(f"REV1-DAQ-Test mit {sample_rate=} und {optime_us=}")
     suptitle(f"{correct=}; {points}")
@@ -81,5 +83,29 @@ else:
     plot(y_sim, "-", label="Simulated 1")
     legend()
     show()
-    
 
+test_optimes_us = [
+    1, 10, 100, 999
+]
+
+test_sample_rates = [
+    10, 50, 100, 1000, 10_000, 12_500, 20_000, 40_000, 100_000, 1_000_000
+]
+
+# or:
+
+test_sample_rates = LUCIDAC.allowed_sample_rates
+
+combinations = product(test_optimes_us, test_sample_rates)
+
+print("op_time_us sample_rate_per_sec expected_points real_points correct")
+for op_time_us, sample_rate_per_sec in combinations:
+    expected_points = int(op_time_us/1e6 * sample_rate_per_sec)
+    if expected_points < 1:
+        continue
+    
+    # useful print if Teensy just crashes:
+    #print("# Now testing...", op_time_us, sample_rate_per_sec, expected_points)
+    expected_points, real_points, correct = run_with(op_time_us, sample_rate_per_sec)
+
+    print(op_time_us, sample_rate_per_sec, expected_points, real_points, correct)
