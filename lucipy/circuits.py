@@ -63,12 +63,12 @@ def next_free(occupied: List[bool], criterion=None, append_to:int=None) -> Optio
 ## Note on naming:
 ## "in" is a reserved keyword in python, so all inputs are called a,b,c,... even if there is ony one
 
-Int = namedtuple("Int", ["id", "out", "a"])       #: Integrator, integrates input "a", output to "out"
-Mul = namedtuple("Mul", ["id", "out", "a", "b"])  #: Multiplier, multiplies inputs "a" with "b", output to "out"
-Id  = namedtuple("Id",  ["id", "out", "a"])       #: Identity element, just passes input "a" to output "out"
-Const = namedtuple("Const", ["id", "out" ])       #: Constant giver, output on (cross lane "out")
-Out = namedtuple("Out", ["id", "lane"])           #: Front panel output (ACL_OUT) on lane "lane"
-Ele = Union[Int,Mul,Const,Id,Out]                 #: type of any kind of element defined so far
+Int = namedtuple("Int", ["id", "out", "a"])          #: Integrator, integrates input "a", output to "out"
+Mul = namedtuple("Mul", ["id", "out", "a", "b"])     #: Multiplier, multiplies inputs "a" with "b", output to "out"
+Id  = namedtuple("Id",  ["id", "out", "a"])          #: Identity element, just passes input "a" to output "out"
+Const = namedtuple("Const", ["id", "out" ])          #: Constant giver. output on (cross lane "out")
+Out = namedtuple("Out", ["id", "lane"])              #: Front panel output (ACL_OUT) on lane "lane"
+Ele = Union[Int,Mul,Const,Id,Out]                    #: type of any kind of element defined so far
 isEle = lambda thing: isinstance(thing, get_args(Ele))
 
 
@@ -340,8 +340,12 @@ class Routing:
     
     def available_lanes(self):
         # for a fully functional lucidac, do this:
-        return list(range(32))
+        #return list(range(32))
         # Instead, we know these lanes are working only:
+        if hasattr(self, "lanes_constraint"):
+            return self.lanes_constraint
+        else:
+            return list(range(32))
         #return [0,1,2,3,4,5, 14,15, 16,17, 18,19, 20,21, 30,31]
     
     def __repr__(self):
@@ -407,21 +411,21 @@ class Routing:
         uin, lane, coeff, iout = route
        
         if isinstance(uin, Const):
-            left_ublock_chip = lambda potential_lane: 15 < potential_lane
-            right_ublock_chip = lambda potential_lane: not left_ublock_chip
+            right_ublock_chip  = lambda potential_lane: 15 < potential_lane
+            left_ublock_chip   = lambda potential_lane: potential_lane < 16
             if lane is None:
                 if uin.out == 14:
-                    criterion = left_ublock_chip
-                elif uin.out == 15:
                     criterion = right_ublock_chip
+                elif uin.out == 15:
+                    criterion = left_ublock_chip
                 else:
                     raise ValueError(f"Unacceptable Constant clane requested in unrouted {route}")
                 lane = self.next_free_lane(criterion)
             else:
-                if uin.out == 14 and not left_ublock_chip(lane):
+                if uin.out == 14 and not right_ublock_chip(lane):
                     raise ValueError(f"No Constant available at {route}, lane must be >15")
-                if uin.out == 15 and not right_ublock_chip(lane):
-                    raise ValueError(f"No Constraint available at {route}, lane must be ...")
+                if uin.out == 15 and not left_ublock_chip(lane):
+                    raise ValueError(f"No Constant available at {route}, lane must be <16")
         
         if isinstance(iout, Out):
             lane = iout.lane
@@ -924,7 +928,6 @@ class Probes:
             #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
             ret["acl_select"] = self.acl_select
         if len(list(filter(notNone, self.adc_channels))):
-            print("adc_channels -> ", self.adc_channels)
             # TODO: Probably check again with the Nones.
             if not all(isinstance(v, int) or v == None for v in self.adc_channels):
                 raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")

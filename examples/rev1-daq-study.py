@@ -94,7 +94,7 @@ test_sample_rates = [
 
 # or:
 
-test_sample_rates = LUCIDAC.allowed_sample_rates
+#test_sample_rates = LUCIDAC.allowed_sample_rates
 
 combinations = product(test_optimes_us, test_sample_rates)
 

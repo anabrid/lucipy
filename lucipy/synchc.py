@@ -84,6 +84,7 @@ class tcpsocket:
     "A socket with readline support"
     def __init__(self, host, port, auto_reconnect=True):
         self.host, self.port, self.auto_reconnect = host, port, auto_reconnect
+        self.debug_print = False
         self.connect()
     def connect(self):
         if(hasattr(self, 's')):
@@ -99,13 +100,15 @@ class tcpsocket:
     def send(self, sth):
         "Expects sth to be a string"
         try:
-            print(f"tcpsocket.send({sth=})")
+            if self.debug_print:
+                print(f"tcpsocket.send({sth=})")
             #self.s.sendall(sth.encode("ascii"))
             self.fh.write(sth + "\n")
             self.fh.flush()
             #print("tcpsocket.send() completed")
         except (BrokenPipeError, ConnectionResetError) as e:
-            print(f"tcpsocket.send: {e}")
+            if self.debug_print:
+                print(f"tcpsocket.send: {e}")
             if self.auto_reconnect:
                 self.connect()
                 return self.send(sth)
@@ -117,13 +120,15 @@ class tcpsocket:
             #print("tcpsocket.readline()")
             #import ipdb; ipdb.set_trace()
             line = self.fh.readline()
-            print(f"tcpsocket.read() = {line}")
+            if self.debug_print:
+                print(f"tcpsocket.read() = {line}")
             return line
         except UnicodeDecodeError as e:
             print(e)
             return ""
         except ConnectionResetError as e:
-            print(f"tcpsocket.read: {e}")
+            if self.debug_print:
+                print(f"tcpsocket.read: {e}")
             if self.auto_reconnect:
                 self.connect()
                 return "" # empty line, since query protcol should not readline empty socket

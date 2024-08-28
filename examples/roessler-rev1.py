@@ -15,7 +15,15 @@ x     = r.int(ic = .066)
 my    = r.int()
 mz    = r.int()
 prod  = r.mul()
-const = r.const()
+const = r.const(1)
+
+# TODO: Cannot use r.const(0) on this list of usable
+#       lanes because Routing.next_free_lane does not properly
+#       hand over the list of available lanes but works on
+#       naive indices, without the mapping.
+
+r.lanes_constraint = [ 1, 2, 3, 5, 6, 10, 11, 12, 14 ]
+r.lanes_constraint.append(17) # for the constant
 
 r.connect(my,    x, weight = -0.8)
 r.connect(mz,    x, weight = -2.3)
@@ -34,6 +42,9 @@ r.connect(const, prod.b, weight = -0.3796)
 r.probe(x, front_port=6)
 r.probe(my, front_port=7)
 
+r.measure(x)
+r.measure(my)
+
 hc = LUCIDAC()
 
 hc.reset_circuit()
@@ -46,7 +57,7 @@ print(config)
 
 hc.set_config(config)
 
-manual_control = True
+manual_control = False
 
 if manual_control:
     hc.manual_mode("ic")
@@ -54,8 +65,12 @@ if manual_control:
     hc.manual_mode("op")
     #sleep(0.5)
 else:
-    hc.set_daq(num_channels=2, sample_rate=125_000)
-    nonexisting_ic = 10 # ns, just not to confuse FlexIO. Current Integrators don't support IC ;-)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_000_000)
+    hc.set_daq(num_channels=2)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_500_000, no_streaming=True)
 
-    run = hc.start_run()
+    from pylab import *
+    x, y = array(hc.start_run().data()).T
+    
+    plot(x)
+    plot(y)
+    show()

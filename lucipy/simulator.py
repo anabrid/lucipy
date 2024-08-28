@@ -79,7 +79,8 @@ class Simulation:
         self.circuit = circuit # only used in set_acl_in
         self.use_acl_in = False # TODO unfinished work
         
-        # whether to use the constant giver
+        # whether to use the constant giver. If not 0/None, this 
+        # also holds the magnitude/value of the constant (+-1, +-0.1)
         self.u_constant = circuit.u_constant
         
         if self.u_constant:

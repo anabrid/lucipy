@@ -10,13 +10,15 @@ from time import sleep
 ramp = Circuit()
 
 integrator = 2
-ic = -1
-slope = +1
+lane = 7
+
+#ic, slope = -1, +1
+ic, slope = +1, -1
 
 i = ramp.int(id=integrator, ic=ic)
-c = ramp.const()
+c = ramp.const(1)
 
-ramp.connect(c, i, weight=slope)
+ramp.route(c, lane, slope, i.a)
 
 ramp.probe(i, front_port=6)
 channel = ramp.measure(i)

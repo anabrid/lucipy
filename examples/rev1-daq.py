@@ -46,7 +46,7 @@ else:
     hc.set_op_time(us=900)
     
     # activate Non-FlexIO code
-    #hc.run_config.no_streaming = True
+    hc.run_config.no_streaming = True
 
     run = hc.start_run()
     data = array(run.data())
