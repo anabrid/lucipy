@@ -372,24 +372,78 @@ class Emulation:
     a real LUCIDAC involved.
         
     Please :ref:`refer to the documentation <emu>` for a high level introduction.
-    
-    .. note::
-        Since the overall code does not use asyncio as a philosophy, also this code is
-        written as a very traditional forking server. In our low-volume practice, there
-        should be no noticable performance penalty.
-
+   
     .. note::
        The error messages and codes returned by this emulator do not (yet) coincide with the
        error messages and codes from the real device.
     
     
     .. note::
+        Since the overall code does not use asyncio as a philosophy, also this code is
+        written as a very traditional forking server. In our low-volume practice, there
+        should be no noticable performance penalty.
+    
         If you choose a forking server, the server can handle multiple clients a time
         and is not "blocking" (the same way as the early real firmware embedded servers were).
         However, the "parallel server" in a forking (=multiprocessing) model also means
         that each client gets its own virtualized LUCIDAC due to the multiprocess nature (no
         shared address space and thus no shared LUCIDAC memory model) of the server.
-       
+    
+    There are three usage modes of this class:
+    
+    - Directly using the emulator methods
+    - Connection from :class:`~synchc.LUCIDAC` over *emulated socket*
+    - Connection from any LUCIDAC JSONL client over TCP socket
+    
+    Direct usage means for instance
+    
+    >>> emu = Emulation()
+    >>> emu.get_entities()
+    {'entities': {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
+    >>> emu.get_circuit()
+    {'entity': None,
+     'config': {'adc_channels': [],
+    ...
+    
+    Given the nature of the JSONL protocol, this usage is *somewhat* as using :class:`~synchc.LUCIDAC`,
+    in particular for setting/getting the circuit and starting a run. Note that this way, no JSON encoding
+    takes place. This mode of operation is primarily useful for unit testing but otherwise does not
+    fulfill the idea of the interface emulation.
+    
+    The emulated socket usage is like
+    
+    >>> from lucipy import LUCIDAC
+    >>> hc = LUCIDAC("emu:/")
+    >>> hc.get_entities()
+    {'entities': {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
+    
+    Note that with this special endpoint URL syntax, even the socket is emulated and no TCP/IP connection
+    is made. Again, this is ideal for unit testing because there is no headache with concurrently testing
+    a server and a client. However, in this mode of operation the control flow remains at the client side
+    and the event loop of the emulator is never triggered. This means that by practice there cannot happen
+    real deviation from a simple query-response principle.
+    
+    The actual intended TCP/IP server usage is like
+    
+    >>> emu = Emulation()
+    >>> proc = emu.serve_forking()
+    >>> endpoint = emu.endpoint()
+    >>> endpoint
+    'tcp://127.0.0.1:5732'
+    >>> hc = LUCIDAC(endpoint)
+    INFO:synchc:Connecting to TCP 127.0.0.1:5732...
+    ...
+    >>> hc.get_entities()
+    ...
+    {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2,
+    ...
+    >>> hc.close()
+    >>> proc.terminate() # stops the server process
+    
+    Note that by the nature of TCP/IP networking, the server can listen also at any other interface and
+    thus can be reached from other computers and processes. In contrast, the previous usage examples were
+    limited to the same python instance, they did not involve real networking.
+    
     """
     
     default_emulated_mac = "-".join("%x"%ord(c) for c in "python")
@@ -625,15 +679,14 @@ class Emulation:
         return exposed_methods
     
     
-    def handle_request(self, line, writer=None):
+    def handle_request(self, line, return_always_list=False):
         """
-        Handles incoming JSONL encoded envelope and respons with a string encoded JSONL envelope
-    
+        Handles incoming JSONL encoded envelope and respons with a string encoded JSONL envelope.
+   
         :param line: String encoded JSONL input envelope
-        :param writer: Callback accepting a single binary string argument. If provided, is used
-            for firing out-of-band messages during the reply from a handler. Given the linear
-            program flow, it shall be guaranteed that the callback is not called after return.
-        :returns: String encoded JSONL envelope output
+        :param return_always_list: Returns always a list of strings
+        :returns: String encoded JSONL single envelope. If out-of-bound messages are generated, will
+          return a list of such strings.
         """
         
         # decided halfway to do it in another way
@@ -653,7 +706,7 @@ class Emulation:
             if not line or line.isspace():
                 return "\n"
             envelope = json.loads(line)
-            print(f"Parsed {envelope=}")
+            #print(f"Parsed {envelope=}")
             ret = {}
             if "id" in envelope:
                 ret["id"] = envelope["id"]
@@ -692,8 +745,9 @@ class Emulation:
                 ret["msg"] = {'error': "Don't know this message type"}
         except json.JSONDecodeError as e:
             ret = { "msg": { "error": f"Cannot read message '{line}', error: {e}" } }
-            
-        return decorate_protocol_reply(ret)
+        
+        ret = decorate_protocol_reply(ret)
+        return [ret] if return_always_list else ret
     
     def __init__(self, bind_addr="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
         """
@@ -715,12 +769,9 @@ class Emulation:
                         #print(f"{has_data(self.rfile)=} {has_data(self.wfile)=}")
                         line = self.rfile.readline().decode("utf-8")
                         #print(f"Got {line=}")
-                        response = parent.handle_request(line, writer=self.wfile.write)
+                        responses = parent.handle_request(line, return_always_list=True)
                         #print(f"Writing out {response=}")
                         #self.request.sendall(response.encode("ascii"))
-                        
-                        # allow multiple responses
-                        responses = [response] if not isinstance(response, list) else response
                         
                         for res in responses:
                             self.wfile.write(res.encode("utf-8"))

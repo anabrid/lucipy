@@ -121,9 +121,8 @@ class DefaultLUCIDAC:
                 cls.MMulOffset + 2*idx,
                 cls.MMulOffset + 2*idx+1)
         if t == Id:
-            # identity elements on Mul-Block map the first 4 MMul inputs o the last 4 MMul outputs
-            # TODO: Check whether this is true in real hardware.
-            return Id(idx, cls.MMulOffset+4, cls.MMulOffset)
+            # identity elements on Mul-Block map the first 4 MMul inputs on the last 4 MMul outputs
+            return Id(idx, cls.MMulOffset+4+idx, cls.MMulOffset+idx)
         if t == Const:
             # Convention for REV1 constants:
             # const(idx=0) => taken from clane 14 => has to be used in lanes  0..15
@@ -212,6 +211,10 @@ class Reservoir:
             self.use_constant()
         return self.alloc(Const, id)
     
+    def identity(self, id=None):
+        "Identity element"
+        return self.alloc(Id, id)
+    
     # some more fun
     def ints(self, count):
         "Allocate count many integrators"
@@ -221,9 +224,14 @@ class Reservoir:
         "Allocate count many multipliers"
         return [self.mul() for x in range(count)]
     
+    def identities(self, count):
+        "Allocate count many identifiers"
+        return [self.identity() for x in range(count)]
+    
     def front_output(self, id=None):
         "ACL_OUT"
         return self.alloc(Out, id)
+
 
 
 Route = namedtuple("Route", ["uin", "lane", "coeff", "iout"])
@@ -668,13 +676,17 @@ class Routing:
         U,C,I = self.routes2input()
         upscaling, scaled_c = self.coeff_upscale(C)
         
-        return {
-            "/U": dict(outputs = U, constant = self.u_constant),
+        d = {
+            "/U": dict(outputs = U),
             "/C": dict(elements = scaled_c),
             "/I": dict(outputs = self.input2output(I), upscaling = upscaling)
         }
-        # TODO: Ublock Altsignals, where in REV1?
-        # ret["/U"]["alt_signals"] = [False]*8
+        
+        # TODO This won't allow to turn OFF the constant.
+        if self.u_constant:
+            d["/U"]["constant"] = self.u_constant
+        
+        return d
         
     def load(self, cluster_config):
         """

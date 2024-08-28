@@ -4,9 +4,13 @@
 #
 
 import pytest
+
 from lucipy import LUCIDAC, Circuit, Simulation
 from lucipy.simulator import remove_trailing
-from fixture_circuits import sinus
+
+from fixture_circuits import circuit_sinus, measure_ramp
+
+from itertools import product
 import numpy as np
 
 @pytest.fixture
@@ -18,7 +22,7 @@ def hc():
 
 # tests the protocol and configuration readout
 def test_set_circuit_for_cluster(hc):
-    set_conf_cluster = sinus().generate(skip="/M1") # Test Hardware has no M1!)
+    set_conf_cluster = circuit_sinus().generate(skip="/M1") # Test Hardware has no M1!)
     hc.set_circuit(set_conf_cluster)
     get_conf_cluster = hc.get_circuit()["config"]
            
@@ -55,69 +59,13 @@ def test_set_adc_channels(hc):
     assert get_adc_channels == c.adc_channels
 
 
-#def test_ramp(hc):
-def measure_ramp(hc, slope=True, lane=0, const_value=+1):
-    # This circuit uses the constant giver for integrating over a constant
-    
-    ic = -slope*const_value
-    
-    # 0 -> clane 14, 1 -> clane 15
-    constant_giver = 1 if lane < 16 else 0
-    
-    t_final = 2
-    expected_result = -(t_final*const_value*slope + ic)
-    assert expected_result == ic
+@pytest.mark.parametrize("slope,lane", product([+1,-1], range(32)))
+def SKIP_test_ramp(hc, slope, lane):
+    valid_endpoint, valid_evolution == measure_ramp(slope, lane) # const_value=-1
+    assert valid_endpoint
+    assert valid_evolution
 
-    ramp = Circuit()
-    i = ramp.int()
-    assert i.out == 0
-    
-    c = ramp.const(constant_giver)
-    assert c.out == 14+constant_giver
-    
-    if const_value != +1:
-        # overwrite the constant to use
-        ramp.use_constant(const_value)
-    
-    #ramp.connect(c, i, weight=slope)
-    
-    # do not use c.out, this way cross-checking if the const
-    # is available at that lane
-    ramp.route(c, lane, slope, i.a)
-    
-    ramp.set_ic(0, ic)
-    
-    channel = ramp.measure(i)
-    
-    conf = ramp.generate(skip="/M1")
-    hc.set_circuit(conf)
-    
-    hc.set_daq(num_channels=2)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=200_000, no_streaming=True)
-
-    run = hc.start_run()
-    data = np.array(run.data())
-    x_hw = data.T[channel]
-    t_hw = np.linspace(0, 2, len(x_hw))
-    
-    sim = Simulation(ramp)
-    assert sim.constant[0] == slope*const_value
-    assert all(sim.constant[1:] == 0)
-    sim_data = sim.solve_ivp(2, dense_output=True)
-    t_sim = t_hw
-    x_sim = sim_data.sol(t_hw)[i.id]
-    # instead of:
-    # x_sim = sim_data.y[i.id]
-    # t_sim = sim_data.t
-
-    # Large tolerance mainly because of shitty non-streaming
-    # data aquisition
-    assert np.isclose(x_sim[-1], expected_result, atol=0.01)
-    valid_endpoint = np.isclose(x_hw[-1],  expected_result, atol=0.3)
-    valid_evolution = np.allclose(x_sim, x_hw, atol=0.2)
-    
-    return valid_endpoint, valid_evolution, x_hw
-
+   
 
 # TESTs to add:
 #

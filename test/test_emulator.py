@@ -1,7 +1,7 @@
 import pytest, numpy as np
 from lucipy import LUCIDAC, Emulation, Circuit, Route
 
-from fixture_circuits import sinus
+from fixture_circuits import circuit_sinus
 
 @pytest.fixture
 def endpoint():
@@ -30,7 +30,7 @@ def test_mac(endpoint):
 
 def test_local_config():
     hc = local_emulator()
-    config = sinus().generate()
+    config = circuit_sinus().generate()
     
     hc.set_circuit([hc.mac, "/0"], config)
     assert hc.get_circuit()["config"]["/0"] == config
@@ -38,7 +38,7 @@ def test_local_config():
 
 def test_set_circuit_cluster(endpoint):
     hc = LUCIDAC(endpoint)
-    set_conf_carrier = sinus().generate()
+    set_conf_carrier = circuit_sinus().generate()
     hc.set_circuit(set_conf_carrier)
     get_conf_carrier = hc.get_circuit()["config"]
 
@@ -64,6 +64,12 @@ def test_set_adc_channels(endpoint):
     assert get_conf["adc_channels"] == c.adc_channels
 
 def test_run_daq(endpoint):
+    """
+    This is a standalone test which makes sure the emulated data aquisition
+    spills out the correct number of samples. This basically emulates how the
+    FlexIO/DMA code should work. It also tests whether the result matches what
+    is expected.
+    """
     hc = LUCIDAC(endpoint)
     hc.reset_circuit()
     

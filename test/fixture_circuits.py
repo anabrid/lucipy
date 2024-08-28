@@ -1,4 +1,8 @@
-from lucipy import Circuit, Route, Connection
+from lucipy import Circuit, Route, Connection, Simulation
+import numpy as np
+import random
+
+sign = lambda val: abs(val) / val
 
 # This file contains *simple* circuits which can be well tested automatically
 
@@ -27,30 +31,283 @@ def circuit_constant2acl_out(coeff0 = -0.5, coeff1 = +0.5):
     
     return const
 
-def sinus():
-    i0, i1 = 0, 1
-    rev1 = Circuit()
+def circuit_sinus(i0=0, i1=1, l0=2, l1=3):
+    s = Circuit()
     
-    #rev1.set_ic(i0, +1)
-    #rev1.set_ic(i1, 0)
+    x = s.int(id=i0, ic=+1)
+    y = s.int(id=i1, ic=0)
     
-    rev1.int(id=i0, ic=+1, slow=False)
-    rev1.int(id=i1, ic=0, slow=False)
+    s.add( Route(x, l0,  1, y) )
+    s.add( Route(y, l1, -1, x) )
     
-    rev1.add( Route(i0, 2,  1, i1) )
-    rev1.add( Route(i1, 3, -1,  i0) )
+    s.measure(x)
+    s.measure(y)
+    
+    return s
 
-    acl_lane = 24 # first ACL lane
-    rev1.add( Route(i0, acl_lane, 1.0, i0) )
-    rev1.add( Route(i1, acl_lane+1, 1.0, i0) )
+def mostclose(a,b, atol, more_then):
+    # Variant of np.allclose which accepts glitches
+    return sum(abs(a-b) < atol) / a.size > more_then
+    # TODO: Just use sum(isclose()) > more_then
+
+def measure_sinus(hc, i0, i1, l0, l1):
+    #hc.reset_circuit()
     
-    return rev1
+    hc.set_circuit(circuit_sinus(i0,i1,l0,l1).generate(skip="/M1"))
+    
+    k0 = 10_000 # system timescale factor if slow=False
+    
+    
+    # this will just show roughly 1.5 wavelengths within the simulation
+    hc.set_daq(num_channels=2, sample_rate=125_000)
+    hc.set_run(halt_on_overload=False, ic_time=200_000)
+    hc.set_op_time(us=900)
+    
+    # activate Non-FlexIO code
+    hc.run_config.no_streaming = True
+    
+    data = np.array(hc.start_run().data())
+    x_measured, y_measured = data[:,0], data[:,1]
+    
+    # TODO Testing with only one channel
+    #x_measuredm, y_measured = data[0], 0
+    
+    t = np.linspace(0, hc.run_config.op_time/1e9, len(data))
+
+    # analytical solution to test problem:
+    x_expected = -np.cos(t * k0) # corresponds to ic=+1
+    y_expected = +np.sin(t * k0) # corresponds to ic=0
+    
+    valid =     mostclose(x_expected, x_measured, atol=0.4, more_then=0.9) \
+            and mostclose(y_expected, y_measured, atol=0.4, more_then=0.9)
+    
+    return valid, x_measured, y_measured, x_expected, y_expected
 
 
-sin = sinus()
-sinconf = sin.generate()
-print(sin)
-print(sinconf)
-cos = Circuit()
-cos.load(sinconf)
-print(cos)
+def measure_ramp(hc, slope=True, lane=0, const_value=+1):
+    # This circuit uses the constant giver for integrating over a constant
+    
+    ic = -slope*const_value
+    
+    # 0 -> clane 14, 1 -> clane 15
+    constant_giver = 1 if lane < 16 else 0
+    
+    t_final = 2
+    expected_result = -(t_final*const_value*slope + ic)
+    assert expected_result == ic
+
+    ramp = Circuit()
+    i = ramp.int()
+    assert i.out == 0
+    
+    c = ramp.const(constant_giver)
+    assert c.out == 14+constant_giver
+    
+    if const_value != +1:
+        # overwrite the constant to use
+        ramp.use_constant(const_value)
+    
+    #ramp.connect(c, i, weight=slope)
+    
+    # do not use c.out, this way cross-checking if the const
+    # is available at that lane
+    ramp.route(c, lane, slope, i.a)
+    
+    ramp.set_ic(0, ic)
+    
+    channel = ramp.measure(i)
+    
+    conf = ramp.generate(skip="/M1")
+    hc.set_circuit(conf)
+    
+    hc.set_daq(num_channels=2)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=200_000, no_streaming=True)
+
+    run = hc.start_run()
+    data = np.array(run.data())
+    x_hw = data.T[channel]
+    t_hw = np.linspace(0, 2, len(x_hw))
+    
+    sim = Simulation(ramp)
+    assert sim.constant[0] == slope*const_value
+    assert all(sim.constant[1:] == 0)
+    sim_data = sim.solve_ivp(2, dense_output=True)
+    t_sim = t_hw
+    x_sim = sim_data.sol(t_hw)[i.id]
+    # instead of:
+    # x_sim = sim_data.y[i.id]
+    # t_sim = sim_data.t
+
+    # Large tolerance mainly because of shitty non-streaming
+    # data aquisition
+    assert np.isclose(x_sim[-1], expected_result, atol=0.01)
+    valid_endpoint = np.isclose(x_hw[-1],  expected_result, atol=0.3)
+    valid_evolution = np.allclose(x_sim, x_hw, atol=0.2)
+    
+    return valid_endpoint, valid_evolution, x_hw
+
+def measure_exp(hc, alpha=-1, ic=+1, lane=0):
+    if sign(alpha) > 0:
+        y_final = 1 # integrate until overload
+    else:
+        y_final = sign(ic) * 0.1 # integrate until a decent small value
+
+    t_final = np.log(y_final/ic) / alpha
+    assert t_final > 0
+
+    e = Circuit()
+    i = e.int(ic=ic)
+    e.route(i, lane, -alpha, i)
+    e.measure(i)
+    hc.set_circuit( e.generate(skip="/M1") )
+    hc.set_daq(num_channels=1)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+    hc.set_op_time(us=200)#k0fast=t_final)
+    
+    data = np.array(hc.start_run().data())
+    x_hw = data[:,0]
+    t_hw = np.linspace(0, t_final, len(x_hw))
+    
+    res = Simulation(e).solve_ivp(t_final, realtime=True, dense_output=True)
+    t_sim = t_hw
+    x_sim = res.sol(t_hw)[i.id]
+    
+    #return x_hw,x_sim,t_sim
+    
+    valid_evolution = np.allclose(x_sim, x_hw, atol=0.1)
+    return valid_evolution, x_hw, x_sim
+
+def measure_cblock_stride(hc, lanes, test_values):
+    "Expect (currently) 2 lanes and 2 mdac test values"
+    k = Circuit()
+    assert len(lanes) == len(test_values)
+    assert len(lanes) < 4 # limited by math id elements
+
+    use_constant_giver = False
+    if use_constant_giver: # constants from Ublock
+        c0, c1 = k.const(0), k.const(1)
+    else: # constant from IC values from an integrator
+        # ic=-1: negate the constant because int output is negated
+        c0 = k.int(ic=-1)
+        c1 = c0
+        # You have to manually ensure that you called
+        # hc.manual_mode("ic") before using this branch!
+    mids = k.identities(len(lanes)) # Math Identity elements
+    # just to make a few more needless routes
+    sink = k.int(id=7) # something non-used
+    
+    for lane in range(32):
+        c = c1 if lane < 16 else c0
+        if lane in lanes:
+            i = lanes.index(lane)
+            test_value = test_values[i]
+            k.route(c, lane, test_value, mids[i])
+        else:
+            # the following is not useful because we cannot access
+            # these values, but just toggle more switches, we configure
+            # it anyway.
+            k.route(c, lane, 0.123, sink)
+    
+    channels = np.array([k.measure(mid) for mid in mids])
+    #print(k)
+    
+    #hc.reset_circuit()
+    #print(k.generate())
+    
+    print(".",end='',flush=True) # some progress indicator
+    
+    # No sanity check: surpress identity-not-used-as-mul's warnings
+    conf = k.generate(skip="/M1", sanity_check=False)
+    
+    if not use_constant_giver:
+        assert not k.u_constant
+        assert not "constant" in conf["/0"]["/U"] or not conf["/0"]["/U"]["constant"]
+    
+    hc.set_circuit(conf)
+    return np.array(hc.one_shot_daq()["data"])[channels]
+
+
+def measure_cblock_stride_variable(hc, lanes, uin_values, coeff_values):
+    """
+    CBlock characterization by variable input, i.e. not
+    constant giver and not IC=+1 but really something where IC in [-1,+1].
+    
+    Expects len 2 vectorial inputs per argument
+    """
+    k = Circuit()
+    
+    # You have to manually ensure that you called
+    # hc.manual_mode("ic") before using this function!
+
+    assert len(lanes) == len(uin_values)
+    assert len(coeff_values) == len(uin_values)
+    assert len(lanes) < 4 # limited by math id elements
+    
+    # constant from IC values from an integrator
+    # ic=-coeff_values: negate the constant because int output is negated
+    consts = [ k.int(ic=-val) for val in uin_values ]
+        
+    mids = k.identities(len(lanes)) # Math Identity elements
+    
+    # just to make a few more needless routes
+    sink = k.int(id=7) # something non-used
+    
+    for lane in range(32):
+        if lane in lanes:
+            i = lanes.index(lane)
+            k.route(consts[i], lane, coeff_values[i], mids[i])
+        else:
+            # the following is not useful because we cannot access
+            # these values, but just toggle more switches, we configure
+            # it anyway.
+            k.route(consts[0], lane, 0.123, sink)
+    
+    channels = np.array([k.measure(mid) for mid in mids])
+    proofs   = np.array([k.measure(ic_const_giver) for ic_const_giver in consts])
+    #print(k)
+    
+    #hc.reset_circuit()
+    #print(k.generate())
+    
+    print(".",end='',flush=True) # some progress indicator
+    
+    # No sanity check: surpress identity-not-used-as-mul's warnings
+    conf = k.generate(skip="/M1", sanity_check=False)
+    
+    assert not k.u_constant
+    assert not "constant" in conf["/0"]["/U"] or not conf["/0"]["/U"]["constant"]
+    
+    hc.set_circuit(conf)
+    sampled_data = np.array(hc.one_shot_daq()["data"])
+    input_data = sampled_data[proofs]
+    output_data = sampled_data[channels]
+    # interestingly, input_data is just garbarage. Need to check...
+    #assert np.allclose(input_data.tolist(), coeff_values, rtol=0.2)
+    return output_data
+
+def measure_cblock(hc, test_values):
+    "Expects 32 test_values"
+    from lucipy.circuits import window
+    
+    stride_size = 2 # use only 2 MathID-elements because other seem broken
+    shape = (int(32/stride_size), stride_size)
+    all_stride_lanes = np.arange(32).reshape(*shape).tolist()
+    all_test_values = np.array(test_values).reshape(*shape).tolist()
+    stride_results = [ measure_cblock_stride(hc,*stride) \
+        for stride in zip(all_stride_lanes, all_test_values)]
+
+    return np.array(stride_results).flatten()
+
+def measure_cblock_variable(hc, uin_values, coeff_values):
+    "Expects 32 uin_values, 32 coeff_values"
+    from lucipy.circuits import window
+    
+    stride_size = 2 # use only 2 MathID-elements because other seem broken
+    shape = (int(32/stride_size), stride_size)
+    all_stride_lanes = np.arange(32).reshape(*shape).tolist()
+    all_uin_values = np.array(uin_values).reshape(*shape).tolist()
+    all_coeff_values = np.array(coeff_values).reshape(*shape).tolist()
+    stride_results = [ measure_cblock_stride(hc,*stride) \
+        for stride in zip(all_stride_lanes, all_test_values, all_coeff_values)]
+
+    return np.array(stride_results).flatten()

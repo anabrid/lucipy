@@ -95,8 +95,8 @@ class tcpsocket:
         self.s.connect((self.host,self.port))
         self.fh = self.s.makefile(mode="rw", encoding="utf-8")
     def close(self):
-        self.s.close()
-        del self.s
+        return self.s.close()
+        #del self.s
     def send(self, sth):
         "Expects sth to be a string"
         try:
@@ -152,7 +152,7 @@ class serialsocket:
         while self.has_data():
             self.fh.readline()
     def close(self):
-        self.fh.close()
+        return self.fh.close()
     def send(self, sth):
         #print(f"serialsocket.send({sth})")
         self.fh.write(sth.encode("ascii") + b"\n")
@@ -169,6 +169,30 @@ class serialsocket:
     def __repr__(self):
         return f"socket:/{self.device}"
 
+class emusocket:
+    "Emulates a socket with a callback function"
+    def __init__(self, callback=None):
+        if not callback:
+            from .simulator import Emulation
+            emu = Emulation()
+            callback = lambda line: emu.handle_request(line)
+        self.callback = callback
+        self.return_buffer = []
+    def send(self, sth):
+        ret = self.callback(sth)
+        if isinstance(ret, list):
+            self.return_buffer += ret
+        else:
+            self.return_buffer.append(ret)
+    def read(self):
+        if self.has_data():
+            return self.return_buffer.pop(0)
+    def close(self):
+        pass
+    def has_data(self):
+        return len(self.return_buffer)
+    def __repr__(self):
+        return f"emu:/?callback={self.callback}"
 
 class jsonlines():
     "Middleware that speaks dictionaries at front and JSON at back"
@@ -193,6 +217,8 @@ class jsonlines():
             return json.loads(read)
         except json.JSONDecodeError as s:
             raise LocalError(f"Could not decode as JSON: {s}. Received message ({len(read)} characters) is '{read}'")
+    def close(self):
+        return self.sock.close()
     def read_all(self):
         while self.sock.has_data():
             yield self.read()
@@ -202,10 +228,12 @@ def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tc
     endpoint = Endpoint(endpoint_url)
     if endpoint.asDevice(): # serial:/dev/foo
         return serialsocket(endpoint.asDevice())
-    elif endpoint.asURL().scheme == "tcp": # tcp://192.168.1.2:5732
+    elif endpoint.asURL().scheme.lower() == "tcp": # tcp://192.168.1.2:5732
         url = endpoint.asURL()
         tcp_port = endpoint.default_tcp_port if not url.port else url.port
         return tcpsocket(url.hostname, tcp_port) # TODO: Get auto_reconnect from a query string
+    elif endpoint.asURL().scheme.lower() in ["emu","sim"]: # emu:// without anything
+        return emusocket()
     else:
         raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
 
@@ -254,6 +282,10 @@ class Run:
                 if msg_new == "DONE":
                     break # successfully transfered all data
                 if msg_new == "ERROR":
+                    # TODO: This is actually a RemoteError,
+                    #  but since we don't get a proper envelope but some weird extra message
+                    #  which does not even hold a suitable error string, we have to come up
+                    #  with something ourselves...
                     raise LocalError(f"Could not properly start the run. Most likely the DAQ ({self.hc.daq_config}) or RUN ({self.hc.run_config}) configuration not accepted by the server side.")
                 # Attention: After runstate stop there still can come a last data
                 #            package.
@@ -367,6 +399,16 @@ class LUCIDAC:
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"
+    
+    def close(self):
+        """
+        Closes connection to LUCIDAC. This will close the socket and should be used
+        when destructing the object. In most scripts it should be not neccessary to call
+        ``close`` explicitely becaue the connection is considered ephermal for the script
+        runtime. However, in unit testing conditions it might be interesting to close a
+        connection in order to be able to reuse the socket ports later.
+        """
+        return self.sock.close()
     
     def send(self, msg_type, msg={}):
         "Sets up an envelope and sends it, but does not wait for reply"
@@ -527,7 +569,7 @@ class LUCIDAC:
             "signal_generator":  { "dac_outputs": dac, "sleep": False }
         } })
     
-    def set_op_time(self, *, ns=0, us=0, ms=0):
+    def set_op_time(self, *, ns=0, us=0, ms=0, sec=0, k0fast=0, k0slow=0):
         """
         Sets OP-Time with clear units. Returns computed value, which is just the **sum of
         all arguments**.
@@ -539,12 +581,20 @@ class LUCIDAC:
         however Python's timedelta has only microseconds resolution which is not as
         highly-resolved as in LUCIDAC.
         
-        
         :param ns: nanoseconds
         :param us: microseconds
         :param ms: milliseconds
+        :param sec: seconds
+        :param k0fast: units of k0fast, i.e. the fast integrators. Measuring time in
+               this units means that within the time ``k0fast=1``` an integrator
+               integrates a constant 1 from initial value 0 to final value 1.
+        :param k0slow: units of k0slow. A slow integrators computes within time ``k0slow=1``
+               a constant 1 from initial vlaue 0 to final value 1.
+
         """
-        self.run_config.op_time = ns + us*1000 + ms*1000*1000
+        optime_ns  = ns + us*1e3 + ms*1e6 + sec*1e9
+        optime_ns += k0fast*1e5 + k0slow*1e7
+        self.run_config.op_time = int(optime_ns)
         return self.run_config.op_time
     
     #: Sample rates per second accepted by the system.
@@ -585,7 +635,7 @@ class LUCIDAC:
             halt_on_overload = True,
             ic_time = None,
             op_time = None,
-            no_streaming = False,
+            no_streaming = None,
             ):
         """
         :param halt_on_external_trigger: Whether halt the run if external input triggers
@@ -604,7 +654,8 @@ class LUCIDAC:
             self.run_config.ic_time = ic_time
         if op_time:
             self.run_config.op_time = op_time
-        self.run_config.no_streaming = no_streaming
+        if no_streaming != None:
+            self.run_config.no_streaming = no_streaming
         return self.run_config
 
     def start_run(self) -> Run:
