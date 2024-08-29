@@ -208,15 +208,15 @@ def detect_network_teensys(zeroconf_timeout=500) -> List[Endpoint]:
 
 def detect(single=False, prefer_network=True, zeroconf_timeout=500):# -> Optional[Endpoint | List[Endpoint]]:
     """
-    Yields or returns possible endpoints by checking. This function will raise an ModuleNotFoundError if a library is not avaiable
-    which might have found more.
+    Yields or returns possible endpoints using all methods. This function will raise an ModuleNotFoundError
+    if a library is not available which might have found more.
 
-    :param single: Return only one found instance or None, if nothing found. If this
+    :param single: Return only first found instance or None, if nothing found. If this
          option is False, this function will return an array of endpoints discovered using all methods.
     :param zeroconf_timeout: Maximum search time: How long to wait for zeroconf answers,
          in milliseconds. Set to 0 or None for unlimited search.
-    :param prefer_network: Yield network result first. Typically a TCP/IP connection is
-         faster and more reliable then the USBSerial.
+    :param prefer_network: Return network result first. Typically a TCP/IP connection is
+         faster and more reliable then the USBSerial connection.
     """
     res = []
     singlize = lambda res: (res[0] if len(res) else None) if single else res
