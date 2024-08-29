@@ -398,12 +398,10 @@ class Emulation:
     Direct usage means for instance
     
     >>> emu = Emulation()
-    >>> emu.get_entities()
-    {'entities': {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
-    >>> emu.get_circuit()
-    {'entity': None,
-     'config': {'adc_channels': [],
-    ...
+    >>> print(emu.get_entities()) # doctest: +ELLIPSIS
+    {'entities': {'70-79-74-68-6f-6e': {'/0': {'/M0': ...
+    >>> emu.get_circuit()         # doctest: +ELLIPSIS
+    {'entity': None, 'config': {'adc_channels': [], ...
     
     Given the nature of the JSONL protocol, this usage is *somewhat* as using :class:`~synchc.LUCIDAC`,
     in particular for setting/getting the circuit and starting a run. Note that this way, no JSON encoding
@@ -414,8 +412,8 @@ class Emulation:
     
     >>> from lucipy import LUCIDAC
     >>> hc = LUCIDAC("emu:/")
-    >>> hc.get_entities()
-    {'entities': {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
+    >>> hc.get_entities()  # doctest: +ELLIPSIS
+    {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
     
     Note that with this special endpoint URL syntax, even the socket is emulated and no TCP/IP connection
     is made. Again, this is ideal for unit testing because there is no headache with concurrently testing
@@ -425,18 +423,14 @@ class Emulation:
     
     The actual intended TCP/IP server usage is like
     
-    >>> emu = Emulation()
+    >>> emu = Emulation(bind_port=0)
     >>> proc = emu.serve_forking()
     >>> endpoint = emu.endpoint()
-    >>> endpoint
-    'tcp://127.0.0.1:5732'
+    >>> endpoint               # doctest: +ELLIPSIS
+    'tcp://127.0.0.1:...'
     >>> hc = LUCIDAC(endpoint)
-    INFO:synchc:Connecting to TCP 127.0.0.1:5732...
-    ...
-    >>> hc.get_entities()
-    ...
-    {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2,
-    ...
+    >>> hc.get_entities()  # doctest: +ELLIPSIS
+    {'70-79-74-68-6f-6e': {'/0': {'/M0': {'class': 2, ...
     >>> hc.close()
     >>> proc.terminate() # stops the server process
     
