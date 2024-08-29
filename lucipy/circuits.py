@@ -212,7 +212,7 @@ class Reservoir:
         return self.alloc(Const, id)
     
     def identity(self, id=None):
-        "Identity element"
+        "Allocates one Identity element"
         return self.alloc(Id, id)
     
     # some more fun
@@ -229,31 +229,85 @@ class Reservoir:
         return [self.identity() for x in range(count)]
     
     def front_output(self, id=None):
-        "ACL_OUT"
+        "Allocates an ACL_OUT Front panel output"
         return self.alloc(Out, id)
 
 
+class Route:
+    """
+    Routes are the essential building block of this circuit API.
+    A list of routes is a way to describe the sparse system matrix (UCI-matrix).
+    Sparse matrix values ``A[i,j]`` can be described with lists of 3-tuples
+    ``(i,j,A)``, i.e. the position and value. This is what ``(uin,iout,coeff)``
+    basically describe. Additionally, there is the ``lane`` which describes the
+    internal structure of the UCI matrix. The maximum of 32 lanes corresponds to
+    the fact that only 32 elements within the system matrix can be nonzero.
 
-Route = namedtuple("Route", ["uin", "lane", "coeff", "iout"])
-"""
-Routes are the essential building block of this circuit API.
-A list of routes is a way to describe the sparse system matrix (UCI-matrix).
-Sparse matrix values ``A[i,j]`` can be described with lists of 3-tuples
-``(i,j,A)``, i.e. the position and value. This is what ``(uin,iout,coeff)``
-basically describe. Additionally, there is the ``lane`` which describes the
-internal structure of the UCI matrix. The maximum of 32 lanes corresponds to
-the fact that only 32 elements within the system matrix can be nonzero.
+    Python allows for any types for the tuple values. Regularly, instances of
+    the computing elements (:class:Int, :class:Mul, etc) are used at the
+    ``uin`` and ``iout`` slots.
 
-Python allows for any types for the tuple values. Regularly, instances of
-the computing elements (:class:Int, :class:Mul, etc) are used at the
-``uin`` and ``iout`` slots.
+    This compiler knows the concept of "not yet placed" routes. This are routes
+    where ``lane == None``. Some of our codes refer to such routes as "logical"
+    in contrast to "physically" placed routes. In this code, unplaced routes are
+    called "Connection", i.e. they can be generated with the :func:`Connection`
+    function.
+    """
+    
+    #: iout constant in order to not connect.
+    do_not_connect = -1
+    
+    def __init__(self, uin, lane, coeff, iout):
+        self.uin = uin
+        self.lane = lane
+        self.coeff = coeff
+        self.iout = iout
+    
+    def __repr__(self):
+        return f"Route(uin={self.uin}, lane={self.lane}, coeff={self.coeff}, iout={self.iout})"
 
-This compiler knows the concept of "not yet placed" routes. This are routes
-where ``lane == None``. Some of our codes refer to such routes as "logical"
-in contrast to "physically" placed routes. In this code, unplaced routes are
-called "Connection", i.e. they can be generated with the :func:Connection
-function.
-"""
+    def __iter__(self):
+        yield self.uin
+        yield self.lane
+        yield self.coeff
+        yield self.iout
+        
+    def __eq__(self, other):
+        return list(self) == list(other)
+
+    def resolve(self):
+        if isEle(self.uin):
+            self.uin = self.uin.out
+
+        if isEle(self.iout):
+            if hasattr(self.iout, "b"):
+                # element with more then one input
+                raise ValueError(f"Please provide input port for {self.iout=} in {self}")
+            elif hasattr(self.iout, "a"):
+                self.iout = self.iout.a
+            else:
+                raise ValueError(f"Element has no inputs. Probably mixed up sinks and sources?")
+    
+    def sanity_list(self):
+        errors = []
+        if None in self:
+            errors.append(f"Route contains None values.")
+        if not self.uin in range(0,16):
+            errors.append(f"Uin out of range in {self}")
+        if not self.lane in range(0,32):
+            errors.append(f"Lane out of range in {self}")
+        if not (-10 <= self.coeff and self.coeff <= +10):
+            errors.append(f"Coefficient out of range in {self}")
+        if not self.iout in range(0,32) and self.iout != self.do_not_connect:
+            errors.append(f"Iout out of range in {self}")
+        return errors
+            
+    def sanity_raise(self):
+        error = ",".join(self.sanity_list())
+        if error:
+            raise ValueError(error)
+        
+
 
 def Connection(source:Union[Ele,int], target:Union[Ele,int], weight=1):
     """
@@ -343,15 +397,38 @@ UCI = namedtuple("UCI", ["U", "C", "I"])
 class Routing:
     """
     This class provides a route-tuple like interface to the UCI block and
-    generates the Output-centric matrix configuration at the end.
+    generates the Output-centric matrix configuration at the end. Most likely,
+    as a user you don't want to intiate a Routing instance but a Circuit instance
+    instead.
+    
+    :arg accept_dirty: Flag for allowing to add "dirty" Routes, i.e. illegal Routes,
+        without raising at :meth:`add`. Instead, you can use :meth:`sanity_check`
+        later to see the problems once more. May be useful for importing existing
+        circuits.
     """
     max_lanes = 32
     #routes : List[Route]
-    
-    #: iout constant in order to not connect.
-    do_not_connect = -1
-    
+        
     def available_lanes(self):
+        """
+        Returns a list of lane indices generally available in the LUCIDAC (independent of
+        their allocation). If you set the class attribute ``lanes_constraint``, their values
+        will be used.
+    
+        >>> r = Routing()
+        >>> r.lanes_constraint = [3, 7, 17]
+        >>> r.connect(0, 8)
+        Route(uin=0, lane=3, coeff=1, iout=8)
+        >>> r.connect(3, 7)
+        Route(uin=3, lane=7, coeff=1, iout=7)
+        >>> r.connect(12, 14)
+        Route(uin=12, lane=17, coeff=1, iout=14)
+        >>> r.connect(7, 9)
+        Traceback (most recent call last):
+        ...
+        ValueError: All [3, 7, 17] available lanes occupied, no more connections possible.
+
+        """
         # for a fully functional lucidac, do this:
         #return list(range(32))
         # Instead, we know these lanes are working only:
@@ -364,10 +441,11 @@ class Routing:
     def __repr__(self):
         return f"Routing({pprint.pformat(self.routes)})"
     
-    def __init__(self, routes: List[Route] = None, **kwargs):
+    def __init__(self, routes: List[Route] = None, accept_dirty=False, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = []
         self.u_constant = False
+        self.accept_dirty = accept_dirty
         if routes:
             self.add(routes)
     
@@ -393,17 +471,39 @@ class Routing:
     
     def use_constant(self, use_constant=True):
         """
-        Useful values for the constant:
-    
-        * ``True`` or ``1.0`` or ``1``: Makes a constant ``+1``
-        * ``0.1`` makes such a constant
-        * ``False`` or ``None`` removes the overall constant
+        Activates/Configures the system's constant giver source. A constant giver allows to
+        use constant numbers within the computation. A constant then can be connected for
+        instance to an integrator or multiplier or summed with other values or constants.
         
-        The constant usage is actually a property of the U block
+        In LUCIDAC, there is one constant source in the U-Block which can configured with
+        these values:
+    
+        * ``True`` or ``1.0`` or ``1``: Generates the constant ``+1``
+        * ``0.1`` generates the constant ``+0.1``
+        * ``False`` removes the overall constant
+        
+        Do not use ``None`` for turning off the constant, as this is the default value for
+        not passing the constant request at all to the LUCIDAC.
+        
+        The constant can be further modified by the coefficient in the lane. This allows for
+        (up and down) scaling and sign inversion of the constant.
+        
+        This method only registers the use of the constant. In order to make use of it, routes
+        using Constants have to be added. As the constants are only available at certain
+        clane/lane positions, you should make use of the :meth:`Reservoir.const` method in
+        order to obtain a Constant object and connect it with :meth:`connect`, which will
+        figure out a suitable lane.
         """
         self.u_constant = use_constant
     
     def next_free_lane(self, constraint=None):
+        """
+        Allocates and returns the next free lane in the circuit.
+        
+        :arg constraint: can be a callback which gets a candidate lane and can accept it as suitable
+           or not. This is useful for instance for the constant sources or ACL_IN/OUT features
+           which are only available on certain lanes or lane combinations.
+        """
         route_for_lane = [ find(lambda r: r.lane == lane, None, self.routes) for lane in self.available_lanes() ]
         is_lane_occupied = [ True if x else False for x in route_for_lane ]
         #print("next_free_lane", self.available_lanes())
@@ -417,6 +517,23 @@ class Routing:
         return self.available_lanes()[idx]
     
     def add(self, route_or_list_of_routes:Union[Route,List[Route]]):
+        """
+        Main method for adding one or multiple routes to the internal route list.
+        
+        If a route containing Elements or a Connection (i.e. a Route with ``lane=None``) is given, this function
+        will do an "immediate pick and place". So if you want, this is the *compiler* component in this class.
+        If a "final" route is given, with only numeric arguments, there is not much to do.
+        
+        As a matter of principle, this function never *corrects* data it receives. That is, it *does* a 
+        certain amount of proof/integrity checking which yields ``ValueErrors`` if we complain about:
+        
+        - Checking whether a Constant can be routed that way
+        - Checking if the requested lane is already in use
+        - Checking whether values are out of bounds (i.e. lanes, coefficients, etc)
+        
+        If you don't want this function to raise on invalid data, set the class attribute ``accept_dirty=True``.
+        This option can also be passed to the constructor.
+        """
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
         
@@ -442,44 +559,40 @@ class Routing:
         
         if isinstance(iout, Out):
             lane = iout.lane
-            iout = self.do_not_connect
+            iout = Route.do_not_connect
         
         if lane is None:
             lane = self.next_free_lane()
         else:
             if lane in [ r.lane for r in self.routes ]:
-                raise ValueError("Cannot append {route} because this lane is already occupied.")
+                raise ValueError(f"Cannot append {route} because this lane is already occupied.")
             
-        # at the end, replace the symbols with numbers.
-        if isEle(uin):
-            uin = uin.out
-
-        if isEle(iout):
-            if hasattr(iout, "b"):
-                # element with more then one input
-                raise ValueError(f"Please provide input port for {iout=} in {route}")
-            elif hasattr(iout, "a"):
-                iout = iout.a
-            else:
-                raise ValueError(f"Element has no inputs. Probably mixed up sinks and sources?")
-            
-        # out of bounds check
-        if coeff < -10 or coeff > 10:
-            raise ValueError(f"Coefficient {coeff} is out of bounds [-10,+10]. Hint: Distribute it around multiple lanes.")
-
         route = Route(uin, lane, coeff, iout)
+        
+        # at the end, replace the symbols with numbers.
+        route.resolve()
+        
+        # out of bounds check
+        if self.accept_dirty:
+            for err in route.sanity_list():
+                print(f"Warning at adding Route: {err}")
+        else:
+            route.sanity_raise()
+        
         self.routes.append(route)
         return route
 
     def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
         """
         Syntactic sugar for adding a :func:`Connection`.
+        :returns: The generated Route.
         """
         return self.add(Connection(source,target,weight))
     
     def route(self, uin, lane, coeff, iout):
         """
         Syntactic sugar for adding a :class:`Route`.
+        :returns: The generated Route.
         """
         return self.add(Route(uin, lane, coeff, iout))
    
@@ -501,7 +614,7 @@ class Routing:
         """
         return UCI(
             U=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
-            I=clean([r.iout for r in self.routes if r.lane == lane and r.iout != self.do_not_connect] for lane in range(32)),
+            I=clean([r.iout for r in self.routes if r.lane == lane and r.iout != Route.do_not_connect] for lane in range(32)),
             C=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
     
@@ -573,7 +686,7 @@ class Routing:
         upscaling = [ (v < -1 or v > 1) for v in c_elements ]
         scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
         return upscaling, scaled_c
-
+    
     def sanity_check(self, also_print=True):
         """
         Performs a number of plausibilty and sanity checks on the given circuit. These are:
@@ -582,19 +695,29 @@ class Routing:
         2. For computing elements with more then one input (currently only the multipliers):
            Checks whether no input or all are used.
         
+        The sanity check is the last bastion between ill-defined data and a writeout to
+        LUCIDAC, which will probably complain in a less comprehensive way.
+        
         :returns: A list of human readable messages as strings. Empty list means no warning.
         
         Examples on errnous circuits:
         
         >>> a = Circuit()
-        >>> a.route(17, -32, -24.0, None)
-        Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        >>> a.routes.append(Route(17, -32, -24.0, None))
         >>> warnings_as_list = a.sanity_check()
         Sanity check warning: Route contains None values.
         Sanity check warning: Uin out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
         Sanity check warning: Lane out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
         Sanity check warning: Coefficient out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
         Sanity check warning: Iout out of range in Route(uin=17, lane=-32, coeff=-24.0, iout=None)
+        
+        Obviously, in the example above the problem started in the first place because the user
+        accessed the ``routes`` atribute instead of using the :meth:`route` or :meth:`add`
+        methods, which already do a good part of the checking. In general, never access the
+        ``routes`` directly for writing.
+        
+        The situation is more difficult when at routing time the problem is not detectable but
+        later it is:
         
         >>> b = Circuit()
         >>> i = b.int()
@@ -626,16 +749,7 @@ class Routing:
         ### General route check
         # These are actually not warnings but errors.
         for route in self.routes:
-            if None in route:
-                warnings.append(f"Route contains None values.")
-            if not route.uin in range(0,16):
-                warnings.append(f"Uin out of range in {route}")
-            if not route.lane in range(0,32):
-                warnings.append(f"Lane out of range in {route}")
-            if not (-20 <= route.coeff and route.coeff <= +20):
-                warnings.append(f"Coefficient out of range in {route}")
-            if not route.iout in range(0,32) and route.iout != self.do_not_connect:
-                warnings.append(f"Iout out of range in {route}")
+            warnings += route.sanity_list()
         
         ### Multiplier check
         multipliers_used = [False]*DefaultLUCIDAC.num_mul
@@ -674,9 +788,14 @@ class Routing:
     def generate(self, sanity_check=True):
         """
         Generate the configuration data structure required by the JSON protocol, which is
-        that "output-centric configuration".
+        that "output-centric configuration". This is a major function of the class. You
+        can use the data structure generated here immediately to produce JSON configuration
+        files as standalone, for instance by passing the output of this function to
+        ``json.dumps(circuit.generate())``.
         
-        Note that C-Matrix values here are correctly scaled.
+        .. note::
+        
+           The C-Matrix values here are correctly scaled.
         """
         
         if sanity_check:
@@ -691,22 +810,34 @@ class Routing:
             "/I": dict(outputs = self.input2output(I), upscaling = upscaling)
         }
         
-        # TODO This won't allow to turn OFF the constant.
-        if self.u_constant:
+        # hopefully this also allows to turn OFF the constant by setting it to False...
+        if self.u_constant != None:
             d["/U"]["constant"] = self.u_constant
         
         return d
         
     def load(self, cluster_config):
         """
-        The inverse of generate.
+        The inverse of generate. Useful for loading an existing circuit. You can load an
+        existing standalone JSON configuration file by using this function.
+        
+        The following code snippet shows that :meth:`load` and :meth:`generate` are really
+        inverse to each other, allowing to first export and then import the same circuit:
         
         >>> a = Routing().randomize()
         >>> b = Routing().load(a.generate(sanity_check=False))
         >>> a.routes == b.routes
         True
         
+        .. note::
+        
+           Also accepts a carrier-level configuration. Does not accept a configuration message
+           including the JSON Envelope right now.
         """
+        
+        if "/0" in cluster_config:
+            cluster_config = cluster_config["/0"]
+        
         # load all in output centric format
         U = cluster_config["/U"]["outputs"] if "/U" in cluster_config else [ None ]*32
         C = cluster_config["/C"]["elements"] if "/C" in cluster_config else [ 0.0  ]*32
@@ -749,7 +880,7 @@ class Routing:
         import numpy as np
         UCI = np.zeros((16,16))
         for (uin, _lane, coeff, iout) in self.routes:
-            if iout != self.do_not_connect:
+            if iout != Route.do_not_connect:
                 UCI[iout,uin] += coeff
         return UCI
     
@@ -781,7 +912,7 @@ class Routing:
             U[lane, uin]  = 1
             I[iout, lane] = 1 if abs(coeff) < 10 else 10
             C[lane, lane] = coeff / I[iout, lane]
-            if iout == self.do_not_connect:
+            if iout == Route.do_not_connect:
                 I[iout, lane] = 0
         
         return UCI(U,C,I)
@@ -871,7 +1002,8 @@ class Routing:
 
     def reverse(self):
         """
-        Trivially "reverse engineer" a circuit based on routes
+        Trivially "reverse engineer" a circuit based on routes. Tries to output valid
+        python code as string.
         """
         self.sanity_check()
         
@@ -964,17 +1096,36 @@ class Probes:
 
 class Circuit(Reservoir, MIntBlock, Routing, Probes):
     """
-    A one stop-shop of a compiler! This class collects all independent behaviour in a neat
-    single-class interface. This allows it, for instance, to provide an improved version of
-    the Reservoir's int() method which also sets the Int state in one go.
-    It also can generate the final configuration format required for LUCIDAC.
+    The Circuit class collects all reconfigurable properties of a LUCIDAC. The class joins
+    all features from it's parents in a *mixin idiom*. (This means that, if you really want to,
+    you also can use the individual features on its own. But there should be no need to do so)
         
-    Note that for the ``Reservoir``, there will be no "backwards syncing", i.e. if routes are
-    added manually without using the Reservoir, it's bookkeeping is no more working.
+    This class provides, for instance, an improved version of the 
+    :meth:`Reservoir.int` method which also sets the integrator state (initial value and time factors)
+    in one method call.
+
+    Most of all, this function generates the final configuration format required for LUCIDAC.
+    
+    However, the mixin idiom also has it's limitations. For instance, for the ``Reservoir``, there
+    will be no "backwards syncing", i.e. if routes are
+    added manually without using the Reservoir, it's bookkeeping is no more working. Example:
+        
+    >>> circ = Circuit()
+    >>> circ.connect(0, 0) # defacto connects M0 first output to M0 first input
+    Route(uin=0, lane=0, coeff=1, iout=0)
+    >>> I = circ.int()
+    >>> print(I)
+    Int(id=0, out=0, a=0)
+    >>> circ.connect(I, I)
+    Route(uin=0, lane=1, coeff=1, iout=0)
+
+    One could expect in this example that ``circ.int()`` hands out the second integrator (``id=1``)
+    but it does not. The registry only knows about how often it was called and does not know at
+    all how the computing elements are used in the Routing.
     """
     
-    def __init__(self, routes: List[Route] = []):
-        super().__init__(routes=routes)
+    def __init__(self, routes: List[Route] = [], accept_dirty=False):
+        super().__init__(routes=routes, accept_dirty=accept_dirty)
     
     def int(self, *, id=None, ic=0, slow=False):
         "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
@@ -1182,6 +1333,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
     
         
     def to_pybrid_cli(self):
+        "Pybrid code generation including both the MIntBlock and Routing."
         nl = "\n"
         ret = "set-alias * carrier" + nl*2
         ret += MIntBlock.to_pybrid_cli(self) + nl
