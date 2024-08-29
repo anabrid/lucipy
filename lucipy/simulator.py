@@ -188,7 +188,7 @@ class Simulation:
         return np.sum(sys != 0, axis=(2,3))
 
     
-    def rhs(self, t, state, clip=True):
+    def rhs(self, t, state, clip=False):
         "Evaluates the Right Hand Side (rhs) as in ``d/dt state=rhs(t,state)``"
         Iout = state
         
@@ -282,7 +282,7 @@ class Simulation:
         self.use_acl_in = True
         self.acl_in_callback = callback
 
-    def solve_ivp(self, t_final, clip=True, ics=None, ics_sign=-1, **kwargs_for_solve_ivp):
+    def solve_ivp(self, t_final, clip=False, ics=None, ics_sign=-1, **kwargs_for_solve_ivp):
         """
         Solves the initial value problem defined by the LUCIDAC Circuit.
         
@@ -301,6 +301,14 @@ class Simulation:
            LUCIDAC (REV1) has negating integrators as the classical integrators but the
            numerical simulation simulates this sign, a ``-1`` is correct here. Better don't
            touch it to remain compatible to the hardware.
+        
+        
+        .. note::
+        
+           Clipping can have a weird effect in (very) linear problems because the underlying ODE
+           Solver will be smart, evaluate the RHS seldomly and thus clipping does not happen
+           fast enough, producing artefacts in the result. Therefore use it with care or make
+           sure to make very small time steps.
         
         Quick usage example:
         
@@ -633,8 +641,8 @@ class Emulation:
         
         from .circuits import Circuit
         circuit = Circuit().load(self.circuit)
-        print(circuit)
-        print(f"{t_final_sec=} {t_final_sec=} {samples_per_second=} {num_samples=} {sampling_times.shape=}")
+        #print(circuit)
+        #print(f"{t_final_sec=} {t_final_sec=} {samples_per_second=} {num_samples=} {sampling_times.shape=}")
         sim = Simulation(circuit, realtime=True)
         res = sim.solve_ivp(t_final_sec, dense_output=True)
         states_sampled = res.sol(sampling_times).T
@@ -644,18 +652,19 @@ class Emulation:
         
         # Simulate a finite buffer
         typical_buffer_size_elements = 100
-        num_messages = int(len(adc_samples) / typical_buffer_size_elements)
-        chunks = np.array_split(adc_samples, num_messages)
-        for chunk in chunks:
-            reply_envelopes.append({
-                "type": "run_data",
-                "msg": {
-                    "id": run_id,
-                    "entity": [ self.mac, "0" ],
-                    "data": chunk.tolist(),
-                }
-            })
-        
+        num_messages = int(max(1, len(adc_samples) / typical_buffer_size_elements))
+        if num_messages > 0:
+            chunks = np.array_split(adc_samples, num_messages)
+            for chunk in chunks:
+                reply_envelopes.append({
+                    "type": "run_data",
+                    "msg": {
+                        "id": run_id,
+                        "entity": [ self.mac, "0" ],
+                        "data": chunk.tolist(),
+                    }
+                })
+                    
         reply_envelopes.append({"type": "run_state_change", "msg": { "id": run_id, "t": self.micros(), "old": "NEW", "new": "DONE" }})
         return reply_envelopes
     
@@ -728,12 +737,12 @@ class Emulation:
                         ret["msg"] = outcome
                 except Exception as e:
                     print(f"Exception at handling {envelope=}: ", e)
-                    # fancy debugging:
-                    import sys, traceback, pdb
-                    extype, value, tb = sys.exc_info()
-                    traceback.print_exc()
-                    pdb.post_mortem(tb)
-                    # end of fancy debugging
+                    if self.debug:
+                        # fancy debugging, python included
+                        import sys, traceback, pdb
+                        extype, value, tb = sys.exc_info()
+                        traceback.print_exc()
+                        pdb.post_mortem(tb)
                     ret["msg"] = {"error": f"Error captured by handle_request(): {type(e).__name__}: {e}" }
             else:   
                 ret["msg"] = {'error': "Don't know this message type"}
@@ -743,7 +752,7 @@ class Emulation:
         ret = decorate_protocol_reply(ret)
         return [ret] if return_always_list else ret
     
-    def __init__(self, bind_addr="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac):
+    def __init__(self, bind_addr="127.0.0.1", bind_port=5732, emulated_mac=default_emulated_mac, debug=False):
         """
         :arg bind_addr: Adress to bind to, can also be a hostname. Use "0.0.0.0" to listen on all interfaces.
         :art bind_port: TCP port to bind to. Use ``0`` to let the Operating System find a free port.
@@ -777,6 +786,7 @@ class Emulation:
         
         self.addr = (bind_addr, bind_port)
         self.handler_class = TCPRequestHandler
+        self.debug = debug
         
     def _serve_forever(self):
         with self.server:

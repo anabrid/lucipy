@@ -1,7 +1,7 @@
 import pytest, numpy as np
 from lucipy import LUCIDAC, Emulation, Circuit, Route
 
-from fixture_circuits import circuit_sinus
+from fixture_circuits import circuit_sinus, measure_ramp
 
 @pytest.fixture
 def endpoint():
@@ -113,4 +113,23 @@ def test_run_daq(endpoint):
     
     assert np.allclose(x_expected, x_measured, atol=1e-2)
     assert np.allclose(y_expected, y_measured, atol=1e-2)
+
+
+def test_ramp(endpoint):
+    # Probably use @pytest.mark.parametrize instead to spawn "more tests"
+    # and thus be faster
+    hc = LUCIDAC(endpoint)
+    hc.reset_circuit()
+
+    slopes   = [-1,-0.5, 0, +0.5,+1]
+    slopes  += [-10, -5, +5, +10]
+    lanes    = [0,7,15,16,27,31] # no need to test range(0,32) in an emulator!
     
+    slow = False
+
+    res = []
+    for lane in lanes:
+        for slope in slopes:
+            hc.reset_circuit()
+            measure_ramp(hc, slope, lane, const_value=-1, slow=slow, do_assert=True)
+        

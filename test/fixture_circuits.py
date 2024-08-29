@@ -84,17 +84,23 @@ def measure_sinus(hc, i0, i1, l0, l1):
     return valid, x_measured, y_measured, x_expected, y_expected
 
 
-def measure_ramp(hc, slope=True, lane=0, const_value=+1):
+def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=False):
     # This circuit uses the constant giver for integrating over a constant
     
-    ic = -slope*const_value
+    upscaling = abs(slope) > 1
+    downscaling = 10 if upscaling else 1
+    slow_time = 100 if slow else 1
+    
+    ic = -slope*const_value/downscaling
     
     # 0 -> clane 14, 1 -> clane 15
     constant_giver = 1 if lane < 16 else 0
     
-    t_final = 2
-    expected_result = -(t_final*const_value*slope + ic)
+    t_final = 2 / downscaling * slow_time
+    expected_result = -(t_final*const_value*slope/slow_time + ic)
+    print(f"{slope=} -> {ic=}, {t_final=}, {expected_result=}")
     assert expected_result == ic
+    print(f"{ic=}, {t_final=}, {expected_result=}")
 
     ramp = Circuit()
     i = ramp.int()
@@ -114,24 +120,31 @@ def measure_ramp(hc, slope=True, lane=0, const_value=+1):
     ramp.route(c, lane, slope, i.a)
     
     ramp.set_ic(0, ic)
+    ramp.set_k0_slow(0, slow)
     
     channel = ramp.measure(i)
     
     conf = ramp.generate(skip="/M1")
     hc.set_circuit(conf)
-    
-    hc.set_daq(num_channels=2)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=200_000, no_streaming=True)
+    ic_time_ns = 90_000_000 if slow else 200_000
+    op_time_ns = 200_000 * slow_time/downscaling
+    hc.set_run(halt_on_overload=False, ic_time=ic_time_ns, op_time=op_time_ns, no_streaming=True)
 
     run = hc.start_run()
     data = np.array(run.data())
     x_hw = data.T[channel]
-    t_hw = np.linspace(0, 2, len(x_hw))
+    t_hw = np.linspace(0, t_final, len(x_hw))
+    
+    if len(x_hw) <= 1:
+        print(f"Warning: Did not get any real data from LUCIDAC: {x_hw=}")
+    
+    # Attention: The simulation will interpolate on the measurements of the real computer.
+    #            If no real aquisition took place, the difference will not be useful.
     
     sim = Simulation(ramp)
     assert sim.constant[0] == slope*const_value
     assert all(sim.constant[1:] == 0)
-    sim_data = sim.solve_ivp(2, dense_output=True)
+    sim_data = sim.solve_ivp(t_final, dense_output=True)
     t_sim = t_hw
     x_sim = sim_data.sol(t_hw)[i.id]
     # instead of:
@@ -143,6 +156,10 @@ def measure_ramp(hc, slope=True, lane=0, const_value=+1):
     assert np.isclose(x_sim[-1], expected_result, atol=0.01)
     valid_endpoint = np.isclose(x_hw[-1],  expected_result, atol=0.3)
     valid_evolution = np.allclose(x_sim, x_hw, atol=0.2)
+    
+    if do_assert:
+        # Having assert in this frame to get access to local variables with pdb
+        assert valid_endpoint and valid_evolution
     
     return valid_endpoint, valid_evolution, x_hw
 
@@ -230,7 +247,8 @@ def measure_cblock_stride(hc, lanes, test_values):
 def measure_cblock_stride_variable(hc, lanes, uin_values, coeff_values):
     """
     CBlock characterization by variable input, i.e. not
-    constant giver and not IC=+1 but really something where IC in [-1,+1].
+    constant giver and not IC=+1 but really something where IC in [-1,+1]
+    (upscaling made via I-block).
     
     Expects len 2 vectorial inputs per argument
     """
@@ -243,9 +261,11 @@ def measure_cblock_stride_variable(hc, lanes, uin_values, coeff_values):
     assert len(coeff_values) == len(uin_values)
     assert len(lanes) < 4 # limited by math id elements
     
+    ic_upscaling = 10 if abs(val) > 1 else 1
+    
     # constant from IC values from an integrator
     # ic=-coeff_values: negate the constant because int output is negated
-    consts = [ k.int(ic=-val) for val in uin_values ]
+    consts = [ k.int(ic=-val/ic_upscaling) for val in uin_values ]
         
     mids = k.identities(len(lanes)) # Math Identity elements
     
@@ -255,7 +275,7 @@ def measure_cblock_stride_variable(hc, lanes, uin_values, coeff_values):
     for lane in range(32):
         if lane in lanes:
             i = lanes.index(lane)
-            k.route(consts[i], lane, coeff_values[i], mids[i])
+            k.route(consts[i], lane, coeff_values[i] * ic_upscaling, mids[i])
         else:
             # the following is not useful because we cannot access
             # these values, but just toggle more switches, we configure

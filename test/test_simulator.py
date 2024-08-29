@@ -1,5 +1,5 @@
+import pytest
 from lucipy import LUCIDAC, Circuit, Route, Connection, Simulation, Emulation
-
 from fixture_circuits import circuit_constant2acl_out
 
 def test_constant_detection_in_simulation():
@@ -25,13 +25,17 @@ def do_NOT_YET_test_measure_acl_constant():
     assert acl_outs[0] == coeff0
     assert acl_outs[1] != coeff1
 
-def test_ramp():
+@pytest.mark.parametrize("slow", [False, True])
+def test_ramp(slow):
     # This circuit uses the constant giver for integrating over a constant
+    # if slow, will use slow integrator.
+    
+    slow_factor = 100 if slow else 1 # difference between k0fast and k0slow
     
     ic = +1
     slope = -1
-    t_final = 2
-    expected_result = -t_final*slope - ic
+    t_final = 2 * slow_factor
+    expected_result = -t_final * slope/slow_factor - ic
     assert expected_result == +1
 
     ramp = Circuit()
@@ -43,15 +47,15 @@ def test_ramp():
     
     ramp.connect(c, i, weight=slope)
     ramp.set_ic(0, ic)
+    ramp.set_k0_slow(0, slow)
     
     sim = Simulation(ramp)
     assert sim.constant[0] == slope
     assert all(sim.constant[1:] == 0)
     
-    res = sim.solve_ivp(2)
+    res = sim.solve_ivp(t_final)
     
     assert res.y[0, 0] == -ic
     
     import numpy as np
     assert np.isclose(res.y[0,-1], expected_result)
-

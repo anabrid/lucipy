@@ -290,12 +290,17 @@ class MIntBlock:
             self.k0s[i] = random.choice([self.slow, self.fast])
 
     def set_ic(self, el:Union[Int,int], val:float):
+        if val < -1 or val > +1:
+            raise ValueError(f"Integrator ICs can only be in range [-1,+1], {val} given for element {el}. Consider rescaling your ODE or coefficient upscaling.")
         el = el.id if isinstance(el, Int) else el
         self.ics[el] = val
     
     def set_k0(self, el:Union[Int,int], val:float):
         el = el.id if isinstance(el, Int) else el
         self.k0s[el] = val
+    
+    def set_k0_slow(self, el:Union[Int,int], val:bool):
+        self.set_k0(el, self.slow if val else self.fast)
         
     def generate(self):
         return {
@@ -457,6 +462,10 @@ class Routing:
                 iout = iout.a
             else:
                 raise ValueError(f"Element has no inputs. Probably mixed up sinks and sources?")
+            
+        # out of bounds check
+        if coeff < -10 or coeff > 10:
+            raise ValueError(f"Coefficient {coeff} is out of bounds [-10,+10]. Hint: Distribute it around multiple lanes.")
 
         route = Route(uin, lane, coeff, iout)
         self.routes.append(route)
@@ -560,7 +569,7 @@ class Routing:
         return input
     
     @staticmethod
-    def coeff_upscale(c_elements):
+    def coeff_upscale(c_elements, raise_out_of_bounds=True):
         upscaling = [ (v < -1 or v > 1) for v in c_elements ]
         scaled_c = [ (c/10 if sc else c) for sc, c in zip(upscaling, c_elements) ]
         return upscaling, scaled_c

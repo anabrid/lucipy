@@ -171,10 +171,10 @@ class serialsocket:
 
 class emusocket:
     "Emulates a socket with a callback function"
-    def __init__(self, callback=None):
+    def __init__(self, callback=None, debug=False):
         if not callback:
             from .simulator import Emulation
-            emu = Emulation()
+            emu = Emulation(debug=debug)
             callback = lambda line: emu.handle_request(line)
         self.callback = callback
         self.return_buffer = []
@@ -232,8 +232,8 @@ def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tc
         url = endpoint.asURL()
         tcp_port = endpoint.default_tcp_port if not url.port else url.port
         return tcpsocket(url.hostname, tcp_port) # TODO: Get auto_reconnect from a query string
-    elif endpoint.asURL().scheme.lower() in ["emu","sim"]: # emu:// without anything
-        return emusocket()
+    elif endpoint.asURL().scheme.lower() in ["emu","sim"]: # emu:/ or emu:/?debug
+        return emusocket(debug="debug" in endpoint.asURL().query)
     else:
         raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
 
@@ -482,7 +482,7 @@ class LUCIDAC:
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
-    def set_config(self, carrier_config):
+    def set_circuit(self, carrier_config):
         """
         This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
         in particular the :func:`~lucipy.circuits.Circuit.generate` method can help to
@@ -506,13 +506,18 @@ class LUCIDAC:
             cluster_config = carrier_config["/0"]
             if "/M0" in cluster_config and not "ic_time" in self.run_config:
                 self.run_config.ic_time = self.determine_idal_ic_time_from_k0s(cluster_config["/M0"])
-        
+            
+        if "adc_channels" in carrier_config:
+            from .simulator import remove_trailing
+            num_channels = len(remove_trailing(carrier_config["adc_channels"], None))
+            self.set_daq(num_channels=num_channels)
+                    
         return self.query("set_circuit", outer_config)
         
     
-    def set_circuit(self, circuit):
+    def set_config(self, circuit):
         "set_config was renamed to set_circuit in later firmware versions"
-        return self.set_config(circuit)
+        return self.set_circuit(circuit)
     
     def set_circuit_alt(self, circuit):
         # manually decompose /0
@@ -601,10 +606,10 @@ class LUCIDAC:
     allowed_sample_rates = [1, 2, 4, 5, 8, 10, 16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 625, 800, 1000, 1250, 1600, 2000, 2500, 3125, 4000, 5000, 6250, 8000, 10000, 12500, 15625, 20000, 25000, 31250, 40000, 50000, 62500, 100000, 125000, 200000, 250000, 500000, 1000000]
     
     def set_daq(self, *,
-            num_channels = 0,
-            sample_op = True,
-            sample_op_end = True,
-            sample_rate = 500_000,
+            num_channels = None,
+            sample_op = None,
+            sample_op_end = None,
+            sample_rate = None,
             ):
         """
         :param num_channels: Data aquisition specific - number of channels to sample. Between
@@ -614,19 +619,20 @@ class LUCIDAC:
         :param sample_rate: Number of samples per second. Note that not all numbers are
            supported. A client side check is performed.
         """
-        if not (0 <= num_channels and num_channels < 8):
-            raise ValueError("Require 0 <= num_channels < 8")
-        # TODO: Check also other values for suitable value.
-        # Do it here or at start_run just before query.
+        if num_channels != None:
+            if not (0 <= num_channels and num_channels < 8):
+                raise ValueError("Require 0 <= num_channels < 8")
+            self.daq_config.num_channels = num_channels
 
-        self.daq_config.num_channels = num_channels
-        self.daq_config.sample_op = sample_op
-        self.daq_config.sample_op_end = sample_op_end
+        if sample_op != None: # boolean
+            self.daq_config.sample_op = sample_op
+        if sample_op_end != None: # boolean
+            self.daq_config.sample_op_end = sample_op_end
         
-        if not sample_rate in self.allowed_sample_rates:
-            raise ValueError(f"{sample_rate=} not allowed. Firmware supports only values from the following list: {self.allowed_sample_rates}")
-        
-        self.daq_config.sample_rate = sample_rate
+        if sample_rate != None:
+            if not sample_rate in self.allowed_sample_rates:
+                raise ValueError(f"{sample_rate=} not allowed. Firmware supports only values from the following list: {self.allowed_sample_rates}")
+            self.daq_config.sample_rate = sample_rate
        
         return self.daq_config
 

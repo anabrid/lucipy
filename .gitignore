@@ -1,7 +1,12 @@
 __pycache__
 *.pyc
+*.kate-swp
 zeroconf/
 test.py
+
+# outputs
+*.png
+*.pdf
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
