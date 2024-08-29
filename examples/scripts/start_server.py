@@ -1,11 +1,22 @@
 #!/usr/bin/env python
+#
+# Example script showing how to invocate the emulated LUCIDAC server.
+#
+# Usage:
+#
+#  export PYTHONPATH=../..  # uses lucipy without installing
+#  python start_server.py
+#
+#
 
 import sys, subprocess
 from lucipy import Emulation
 
-emu = Emulation(bind_addr="0.0.0.0", bind_port=int(sys.argv[1]))
+# either use port given or let OS choose the port
+port = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+emu = Emulation(bind_addr="0.0.0.0", bind_port=port)
 
-# use this in particular with python debugger
+# use this version in particular with python debugger
 emu.serve_blocking()
 
 threading = False
