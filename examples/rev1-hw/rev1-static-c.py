@@ -61,6 +61,10 @@ else:
     
     # TODO: Continue, do a full sampling
     
+    # TODO: Does this even make sense?
+    #       We can also continue with the ramp tests and just loop them
+    #       over multiple coeff values!
+    
     #for i,uin in enumerate(uin_values):
     #    for j,coeff in enumerate(coeff_values):
     #        print(i,j,uin,coeff)

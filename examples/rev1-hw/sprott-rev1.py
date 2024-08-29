@@ -71,7 +71,15 @@ if manual_control:
     #sleep(0.5)
 else:
     hc.set_daq(num_channels=2, sample_rate=125_000)
-    nonexisting_ic = 10 # ns, just not to confuse FlexIO. Current Integrators don't support IC ;-)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_000_000)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+    hc.set_op_time(sec=3)
 
     run = hc.start_run()
+
+    from pylab import *
+    x, y = array(run.data()).T
+
+    figure()
+    scatter(x,y)
+    show()
+

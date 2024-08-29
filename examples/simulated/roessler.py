@@ -16,7 +16,7 @@ x     = r.int(ic = .066)
 my    = r.int()
 mz    = r.int()
 prod  = r.mul()
-const = r.const()
+const = r.const(1)
 
 r.connect(my,    x, weight = -0.8)
 r.connect(mz,    x, weight = -2.3)

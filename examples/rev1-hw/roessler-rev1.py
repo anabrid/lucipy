@@ -22,8 +22,8 @@ const = r.const(1)
 #       hand over the list of available lanes but works on
 #       naive indices, without the mapping.
 
-r.lanes_constraint = [ 1, 2, 3, 5, 6, 10, 11, 12, 14 ]
-r.lanes_constraint.append(17) # for the constant
+#r.lanes_constraint = [ 1, 2, 3, 5, 6, 10, 11, 12, 14 ]
+#r.lanes_constraint.append(17) # for the constant
 
 r.connect(my,    x, weight = -0.8)
 r.connect(mz,    x, weight = -2.3)
@@ -66,7 +66,7 @@ if manual_control:
     #sleep(0.5)
 else:
     hc.set_daq(num_channels=2)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=1_500_000, no_streaming=True)
+    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=100_500_000, no_streaming=True)
 
     from pylab import *
     x, y = array(hc.start_run().data()).T

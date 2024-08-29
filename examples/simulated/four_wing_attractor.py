@@ -50,6 +50,10 @@ f.connect(mz, xz.b)
 f.connect(mx, xy.a)
 f.connect(my, xy.b)
 
+f.measure(mx)
+f.measure(my)
+f.measure(mz)
+
 # Run simulation
 sim     = Simulation(f)                 # Create simulation object
 t_final = 1000
@@ -67,4 +71,21 @@ plt.plot(my_out, mz_out)                  # Create a phase space plot.
 #plt.plot(mx_out)
 #plt.plot(my_out)
 #plt.plot(mz_out)
-plt.show()                              # Display the plot.
+#plt.show()                              # Display the plot.
+
+from lucipy import LUCIDAC
+
+
+hc = LUCIDAC()
+hc.reset_circuit()
+hc.set_circuit(f.generate(skip="/M1"))
+hc.set_daq(num_channels=3)
+hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+hc.set_op_time(ms=10)
+
+from pylab import *
+x, y, z = array(hc.start_run().data()).T
+
+figure()
+plot(y,z)
+show()
