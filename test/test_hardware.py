@@ -45,8 +45,8 @@ def test_set_circuit_for_cluster(hc):
     # get rid of M1 block
     del get_conf_cluster["/0"]["/M1"]
             
-    print(f"{set_conf_cluster["/0"]=}")
-    print(f"{get_conf_cluster["/0"]=}")
+    print(f"{set_conf_cluster['/0']=}")
+    print(f"{get_conf_cluster['/0']=}")
     
     ## Differences are still in the U-block. Look carefully.
     ## Probably we have an old an unsuitable commit.
