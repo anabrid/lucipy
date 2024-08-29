@@ -38,14 +38,34 @@ class Simulation:
     A simulator for the LUCIDAC. Please :ref:`refer to the documentation <sim>`
     for a theoretical and practical introduction.
     
+    The Simulator has an API which is suitable for getting a LUCIDAC circuit solved in
+    Python as easy as possible. The usage can boil down to something like
+    ``integrator_data = Simulation(circuit).solve_ivp(t_final)``. In particular, the
+    Simulator will allow to inspect the LUCIDAC and its internal states as much as you
+    want.
+    
+    If you want to use an API which is simliar to the LUCIDAC Hybrid Controller, use the
+    :class:`Emulation` instead. It uses the :class:`Simulation` under the head but does
+    not expose it but instead just returns the requested ADC sampling values when using
+    it in a way like
+    ``e = Emulation(); e.set_circuit(circuit.generate()); data = e.start_run(...)``.
+    This way, you can steer for instance the sampling times.
+    In contrast, if not requested explicitely with suitable ADC settings, it won't
+    return the full integrator state and also won't provide any support for ACL_IN/OUT
+    or further device inspection, given the limited JSON_API of the LUCIDAC. See there
+    for getting a list of limitations.
+    
     Important properties and limitations:
     
     * Currently only understands mblocks ``M0 = Int`` and ``M1 = Mul`` in REV1-Hardware fashion
     * Unrolls Mul blocks at evaluation time, which is slow
-    * Note that the system state is purely hold in I.
-    * Note that k0 is implemented in a way that 1 time unit = 10_000 and
-      k0 slow results are thus divided by 100 in time.
-      Should probably be done in another way so the simulation time is seconds.
+    * Note that the system state is purely hold in the integrators.
+      It always evolves all 8 integrators and returns all 8 integrators.
+      It is up to the user to use the provided mapping functions to derive the
+      neccessary output.
+    * Note that by default ``k0`` is implemented in a way that ``1 time unit = 10_000``
+      and ``k0`` slow results are thus divided by ``100`` in time. Use ``realtime``
+      to measure simulation time in seconds instead.
     
     :arg circuit: An :class:`circuits.Circuit` object. We basically only need it
       in order to make use of the :meth:`~circuits.Circuit.to_dense_matrix` call.
@@ -55,9 +75,9 @@ class Simulation:
       applications. You can set the time factor later by overwriting the ``int_factor``
       property.
     
-    .. note::
+   
+    Note, here is a tip to display the big matrices in one line:
     
-       Here is a tip to display the big matrices in one line:
        >>> import numpy as np
        >>> np.set_printoptions(edgeitems=30, linewidth=1000, suppress=True)
 
@@ -181,7 +201,7 @@ class Simulation:
     def nonzero(self):
         """
         Returns the number of nonzero entries in each 2x2 block matrix. This makes it easy to
-        count the different type of connections in a circuit (like INT->INT, MUL->INT, INT->MUL, MUL->MUL).
+        count the different type of connections in a circuit (like ``INT->INT, MUL->INT, INT->MUL, MUL->MUL``).
         """
         import numpy as np
         sys = np.array([[self.A,self.B],[self.C,self.D]])
@@ -278,6 +298,10 @@ class Simulation:
         
         If you want to remove the ACL_IN callback function, call the method with
         argument ``None``.
+        
+        .. warning::
+        
+           This is merely a stub, the ACL Input is NOT YET fully implemented.
         """
         self.use_acl_in = True
         self.acl_in_callback = callback

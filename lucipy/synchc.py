@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 
 """
-An Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC
+An Synchronous Hybrid Controller Python Client for REDAC/LUCIDAC.
 
-This is a minimal python client, making simple things simple. That means things
-like device managament is capable of the python REPL without headache, following
-the KISS principle.
+This is a minimal python client with focus on interactive python prompt usage.
 
 This client implementation does *not* feature strong typing, dataclasses,
 asynchronous functions. Instead, it implements a blocking API and tries to
-mimic the way how the Model-1 Hybrid Controller interface worked
-(the one in https://github.com/anabrid/pyanalog/).
+mimic the way how the *Model-1 Hybrid Controller* interface worked
+(in particular in the `PyAnalog <https://github.com/anabrid/pyanalog/>`_
+research code).
 
 This is a single file implementation focussing on portability and minimal
-dependencies. If you have pyserial installed, it will be used, otherwise this
-also runs fine without.
+dependencies. If you have ``pyserial`` installed, it will be used to allow
+serial connections, otherwise it runs with python "batteries included" to
+connect to TCP/IP targets.
+
+In particular, there are no dependencies on any other lucipy module, except
+:mod:`~lucipy.detect`. In particular, this code is completely independent from
+the :mod:`~lucipy.circuits` module which can serve to simplify to set up the
+data structure required by :meth:`LUCIDAC.set_circuit`.
+
+The main class to use from this module is :class:`LUCIDAC`.
 """
 
 # all this is only python standard library  :)
@@ -24,6 +31,11 @@ log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
 
 from .detect import detect, Endpoint
+
+__all__ = """
+    LUCIDAC Run LUCIGroup
+    RemoteError LocalError
+""".split()
 
 nonempty = lambda lst: [x for x in lst if x]
 
@@ -234,6 +246,11 @@ def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tc
         return tcpsocket(url.hostname, tcp_port) # TODO: Get auto_reconnect from a query string
     elif endpoint.asURL().scheme.lower() in ["emu","sim"]: # emu:/ or emu:/?debug
         return emusocket(debug="debug" in endpoint.asURL().query)
+    elif endpoint.asURL().scheme.lower() == "zeroconf":
+        endpoint_url = detect(single=True)
+        if not endpoint_url:
+            raise ValueError("zeroconf:/ explicitely asked for, but no endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
+        return endpoint2socket(endpoint_url)
     else:
         raise ValueError(f"Illegal {endpoint_url=}. Expecting something like tcp://192.168.1.2:5732 or serial:/dev/foo")
 
@@ -336,10 +353,10 @@ class LUCIDAC:
         is applied and the first connection is chosen. Note that if no LUCIDAC
         is attached via USB serial, the zeroconf detection will require a few
         hundred milliseconds, depending on your network.
-    :param auto_reconnect: Whether reconnect in case of los connection
-    :param register_methods: Register typical message types exposed by the server
-        as methods for this class. This allows to call ``hc.foo(bar)`` instead of
-        ``hc.query("foo", bar)``.
+        
+        For details, see :ref:`lucipy-detection`.
+    :param auto_reconnect: Whether reconnect in case of loss connection (TODO: Move
+        to parameter ``?reconnect`` in the endpoint URL syntax)
     """
    
     ENDPOINT_ENV_NAME = "LUCIDAC_ENDPOINT"
@@ -377,11 +394,11 @@ class LUCIDAC:
         self.sock = jsonlines(socket)
         self.req_id = 50
         
-        "Eth Mac address of Microcontroller, required for the circuit entity hierarchy"
+        #: Ethernet Mac address of Microcontroller, required for the circuit entity hierarchy
         self.hc_mac = None
         # TODO: Maybe change firmware once in a way that it doesn't really need the client to know it
         
-        "Storage for stateful preparation of runs."
+        #: Storage for stateful preparation of runs.
         self.run_config = dotdict(
             halt_on_external_trigger = False,
             halt_on_overload  = True,
@@ -389,7 +406,7 @@ class LUCIDAC:
             op_time = 234567, # ns
         )
 
-        "Storage for stateful preparation of runs."
+        #: Storage for stateful preparation of runs.
         self.daq_config = dotdict(
             num_channels = 0,
             sample_op = True,

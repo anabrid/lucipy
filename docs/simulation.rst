@@ -28,8 +28,8 @@ This Simulator adopts the convention with the column order
 
 ::
 
-    M1 Mul
-    M0 Int
+    M0 = Integrator Block (8 Integrators)
+    M1 = Multiplier Block (4 Multipliers, 4 identity elements)
 
 The basic idea is to relate the standard first order differential equation
 :math:`\dot{\vec x} = \vec f(\vec x)` with the LUCIDAC system matrix
@@ -58,10 +58,10 @@ elements, in particular the multipliers. By splitting the matrix
 
 .. math::
 
-    \begin{pmatrix} M^{in} \\ I^{in} \end{pmatrix}
+    \begin{pmatrix} I^{in} \\ M^{in} \end{pmatrix}
     = 
     \begin{bmatrix} A & B \\ C & D \end{bmatrix}
-    \begin{pmatrix} M^{out} \\ I^{out} \end{pmatrix}
+    \begin{pmatrix} I^{out} \\ M^{out} \end{pmatrix}
 
 Note how this notation maps implicit summing of the UCI matrix on the summing
 property of a matrix multiplication.
@@ -76,21 +76,21 @@ First, let us write out the vectors
 
     \begin{aligned}
     M^{in} &= \left( M^{in}_{0a}, M^{in}_{0b}, M^{in}_{1a}, M^{in}_{1b}, \dots, M^{in}_{3a} \right) \\
-    M^{out} &= \left( M^{out}_0, M^{out}_1, M^{out}_2, M^{out}_3, c_0, c_1, c_2, c_3 \right) \\
+    M^{out} &= \left( M^{out}_0, M^{out}_1, M^{out}_2, M^{out}_3, M^{in}_{0a}, M^{in}_{0b}, M^{in}_{1a}, M^{in}_{1b} \right) \\
     I^{in} &= \left( I^{in}_0, \dots, I^{in}_7 \right) \\
     I^{out} &= \left( I^{out}_0, \dots, I^{out}_7 \right)
     \end{aligned}
 
 This is a definition for REV0 where the superfluous Math block outputs are used
-for constant givers :math:`c_i = 1`.
+for identity elements.
 
 The algorithm is as following: The set of equations is written out as
 
 .. math::
 
     \begin{aligned}
-    M^{in}_i &= A_{ij} ~ M^{out}_j + B_{ij} ~ I^{out}_{ij} \quad&&\text{(eq I)} \\
-    I^{in}_i &= C_{ij} ~ M^{out}_j + D_{ij} ~ I^{out}_{ij} \quad&&\text{(eq II)}
+    I^{in}_i &= A_{ij} ~ I^{out}_j + B_{ij} ~ M^{out}_{ij} \quad&&\text{(eq I)} \\
+    M^{in}_i &= C_{ij} ~ I^{out}_j + D_{ij} ~ M^{out}_{ij} \quad&&\text{(eq II)}
     \end{aligned}
 
 and then compute (eq I) :math:`M^{in} = g(I^{out})` with an initial guess :math:`M^{out}=0` and

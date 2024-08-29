@@ -3,9 +3,7 @@
 Developer guide
 ===============
 
-For getting started as a developer, just follow the :ref:`installation` guide.
-
-
+For getting started as a developer, first follow the :ref:`installation` guide.
 
 Technical notes
 ---------------
@@ -121,10 +119,11 @@ Extensible by default.
 
 Do not implement a compiler
    We have a number of ongoing projects for implementing a world class differential equations compiler
-   for LUCIDAC/REDAC. At the same time there is an urgent need for programming LUCIDAC in a less
-   cryptic way then ``route -- 8 0 -1.25 8``. Therefore, the lucipy :py:class:`.Circuit` class and friends
-   tries to provide as few code as possible to make this more comfortable, without implementing too
-   many logic.
+   for LUCIDAC/REDAC. The lucipy :py:class:`.Circuit` class provides a very shim layer ontop of
+   the "raw" numeric configuration of the interconnection matrix. It barely hides the fact that there
+   is a lot of indices going from A to B and allows to interact with these numbers. The approach is
+   a greedy "place early" approach. Instead of providing a compiler, lucipy tries to be a toolbox
+   for conversion formats.
    
 Implement the UNIX principle
    *Do one thing and do it good* is the major design goal of lucipy. Any sophisticated task should
@@ -167,9 +166,12 @@ No async co-routines
    My personal preference is that async gives a terrible programmer's experience
    (I wrote about it: `python co-routines considered bad <https://denktmit.de/blog/2024-07-11-Reductionism-in-Coding/>`_).
    It is also *premature optimization* for some future-pointing high performance message broker
-   which does single-threaded work while asynchronously communicating with the REDAC. So
-   let's get back to the start and work synchronously, which *dramatically* reduces the
-   mental load.
+   which does single-threaded work while asynchronously communicating with the REDAC.
+   
+   The main problem with async's is that it somewhat breaks the brief code style python can have.
+   Python can serve as an excellent domain specific language (DSL) with a pretty terse syntax. Adding
+   ``async`` in front of literally every word makes this much harder to read and write. Furthermore,
+   asyncs require an ``async main`` and thus in general disturb the REPL kind of use.
 
 No typing
    There is little advantage of having a loosely typed server (firmware without typed JSON mapping)
