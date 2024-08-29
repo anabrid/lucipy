@@ -386,9 +386,14 @@ class LUCIDAC:
             if self.ENDPOINT_ENV_NAME in os.environ:
                 endpoint_url = os.environ[self.ENDPOINT_ENV_NAME]
             else:
-                endpoint_url = detect(single=True)
+                endpoint_url = detect(single=True) 
+                # should raise an ModuleNotFoundError if and only if a library is missing which could have found something
                 if not endpoint_url:
-                    raise ValueError("No endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
+                    raise ValueError("No endpoint provided as argument or in ENV variable "
+                                     + self.ENDPOINT_ENV_NAME + 
+                                     " and did not discover an USB or network endpoint. No missing external libraries encountered.")
+                    # self.ENDPOINT_ENV_NAME is used instead of the hardcoded string in case
+                    # one wants to modify the env variable name.
                 
         socket = endpoint2socket(endpoint_url)
         self.sock = jsonlines(socket)
