@@ -17,57 +17,57 @@ The following examples are short single file standalone scripts which you can do
 execute if you have lucipy installed. You can find them in the ``examples`` directory of
 the lucipy repository.
 
-:download:`Rössler <../examples/roessler.py>`
+:download:`Rössler <../examples/simulated/roessler.py>`
    Rössler attractor on LUCIDAC, as from 
    `Analog Paradigm Application Note 1 <https://analogparadigm.com/downloads/alpaca_1.pdf>`_.
    Coincidentally, see this example in a very similar notation also in the several-years old
    `PyAnalog FPAA YML <https://github.com/anabrid/pyanalog/blob/master/examples/fpaa-circuits/Alpaca01-Roessler-Attractor.yml>`_.
 
-:download:`Lorenz <../examples/lorenz.py>`
+:download:`Lorenz <../examples/simulated/lorenz.py>`
    Lorenz attractor on LUCIDAC, as from 
    `Analog Paradigm Application Note 2 <https://analogparadigm.com/downloads/alpaca_2.pdf>`_.
 
-:download:`Hindmarsh-Rose <../examples/hindmarsh-rose-neuron.py>`
+:download:`Hindmarsh-Rose <../examples/simulated/hindmarsh-rose-neuron.py>`
    Single Spiking Neuron Model on LUCIDAC, as from 
    `Analog Paradigm Application Note 28 <https://analogparadigm.com/downloads/alpaca_28.pdf>`_.
 
-:download:`Euler spiral <../examples/euler.py>`
+:download:`Euler spiral <../examples/simulated/euler.py>`
    Euler spiral on LUCIDAC, cf. 
    `Analog Paradigm Application Note 33 <https://analogparadigm.com/downloads/alpaca_33.pdf>`_.
    (Software simulation)
 
-:download:`Sprott SQm system <../examples/sqm.py>`
+:download:`Sprott SQm system <../examples/simulated/sqm.py>`
    Chaotic Sprott system on LUCIDAC, cf. 
    `Analog Paradigm Application Note 31 <https://analogparadigm.com/downloads/alpaca_31.pdf>`_.
    (Software simulation)
 
-:download:`Yet another chaotic Sprott system <../examples/sprott.py>`
+:download:`Yet another chaotic Sprott system <../examples/simulated/sprott.py>`
    Yet another chaotic Sprott system on LUCIDAC, cf. 
    `Analog Paradigm Application Note 43 <https://analogparadigm.com/downloads/alpaca_43.pdf>`_.
    (Software simulation)
 
-:download:`A chaotic system due to Lorenz, 1984 <../examples/lorenz84.py>`
+:download:`A chaotic system due to Lorenz, 1984 <../examples/simulated/lorenz84.py>`
    A chaotic system due to Lorenz in 1984 on LUCIDAC
    (Software simulation)
 
-:download:`A three-time-scale system <../examples/ttss.py>`
+:download:`A three-time-scale system <../examples/simulated/ttss.py>`
    A three-time-scale-system on LUCIDAC, cf. 
    `Analog Paradigm Application Note 44 <https://analogparadigm.com/downloads/alpaca_44.pdf>`_.
    (Software simulation)
 
-:download:`A four wing attractor <../examples/four_wing_attractor.py>`
+:download:`A four wing attractor <../examples/simulated/four_wing_attractor.py>`
    A four wing attractor on LUCIDAC.
    (Software simulation)
 
-:download:`The Halvorsen attractor <../examples/halvorsen.py>`
+:download:`The Halvorsen attractor <../examples/simulated/halvorsen.py>`
    The Halvorsen attractor on LUCIDAC.
    (Software simulation)
 
-:download:`The Dadras attractor <../examples/dadras.py>`
+:download:`The Dadras attractor <../examples/simulated/dadras.py>`
    The Dadras attractor on LUCIDAC.
    (Software simulation)
 
-:download:`The reduced Henon-Heiles attractor <../examples/rhh.py>`
+:download:`The reduced Henon-Heiles attractor <../examples/simulated/rhh.py>`
    The reduced Henon-Heiles attractor on LUCIDAC (cf. Julienn Clinton Sprott,
    "Elegang Chaos - Algebraically Simple Chaotic Flows", World Scientific,
    2016, pp. 133 f.
@@ -84,4 +84,4 @@ great experience to get started with lucipy.
 .. toctree::
    :maxdepth: 2
 
-   examples/Schroedinger.ipynb
+   examples/simulated/Schroedinger.ipynb
