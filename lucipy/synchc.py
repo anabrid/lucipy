@@ -693,7 +693,7 @@ for cmd in LUCIDAC.commands:
     shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
     shorthand.__doc__ = f'Shorthand for ``query("{cmd}", msg)``, see :meth:`query`.'
     #shorthand = types.MethodType(shorthand, self) # bind function
-    if cmd in LUCIDAC.memoizable:
+    if hasattr(functools, "cache") and cmd in LUCIDAC.memoizable:
         shorthand = functools.cache(shorthand)
     if not hasattr(LUCIDAC, cmd):
         setattr(LUCIDAC, cmd, shorthand)
