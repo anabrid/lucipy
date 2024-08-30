@@ -546,35 +546,93 @@ class LUCIDAC:
             })
             del carrier_config["/0"]
         self.set_circuit(carrier_config)
+    
+    @staticmethod
+    def resolve_path(path, config={}):
+        """
+        Provides the notational sugar for :meth:`set_by_path`.
         
+        The path must point to an entity and not to an element. 
+        An entity corresponds to a class on the firmware side which can receive configuration
+        "elements". The path can be provided as string, such as ``/0/C``
+        or ``0/C`` or as array of strings such as ``["0", "C"]``.
+        
+        Since this client has no information about the entity structure and the element
+        configuration, it cannot accept paths which also include elements, such as
+        ``/0/M0/elements/0/ic`` for setting the first integrator value. However, as
+        a "nicety" it allows to generate a nested directory structure by introducing
+        a "double slash" notation, which is ``/0/M0//elements/0/ic``, or as array,
+        ``["0", "M0", "", "elements", "0", "ic"]``. Internally, such a call is then
+        translated to the path ``0/M0`` and the configuration dictionary is wrapped as
+        ``{ "elements": {"0": {"ic": actual_config } } }``. This way, one can set
+        actual elements very conveniently.
+
+        >>> LUCIDAC.resolve_path("/0/M0")
+        (['0', 'M0'], {})
+        >>> LUCIDAC.resolve_path("foo/bar", "baz")
+        (['foo', 'bar'], "baz")
+        >>> LUCIDAC.resolve_path("foo/bar//baz", "kaz")
+        (['foo', 'bar'], {'baz': 'kaz'})
+        >>> LUCIDAC.resolve_path("foo/bar//bax/bay/baz", {"bir":"bur"})
+        (['foo', 'bar'], {'bax': {'bay': {'baz': {'bir': 'bur'}}}})
+            
+        In the following real world example, all notations are equvialent:
+        
+        >>> a = hc.resolve_path(["0", "M0"], {"elements":{0: {"ic":0.23, "k":100} } })
+        >>> b = hc.resolve_path("/0/M0",     {"elements":{0: {"ic":0.23, "k":100} } })
+        >>> c = hc.resolve_path("/0/M0//elements/0",         {"ic":0.23, "k":100})
+        >>> print(a)
+        (['0', 'M0'], {'elements': {'0': {'ic': 0.23, 'k': 100}}})
+        >>> assert a == b and b == c
+
+        """
+        if isinstance(path, str):
+            apath = path.split("/")
+            if apath[0] == "": # remove leading slash if it was there
+                apath.pop(0)
+            if apath.count("") == 1: # entity-element split given
+                split_index = apath.index("")
+                entity_path, element_path = apath[:split_index], apath[split_index+1:]
+                wrapper_config = config
+                for e in element_path[::-1]:
+                    wrapper_config = { e: wrapper_config }
+                return (entity_path, wrapper_config)
+            elif apath.count("") > 1:
+                raise ValueError(f"'{path}': Invalid entity path given. Entity-Element split '//' can only applied once.")
+            path = apath
+        return (path, config)
     
     def set_by_path(self, path, config):
         """
         Set element configuration by path.
         
-        This is a fine-granular alternative to :meth:`set_circuit`.
+        This is a fine-granular alternative to :meth:`set_circuit`. For the meaning of
+        ``path``, see :meth:`resolve_path`.
+
+        Note that the path is always relative to the carrier, not the cluster. That means
+        most of the time you want to address the cluster just by ascending with the
+        entity path "0".
+         
+        When providing entities as list, do not prepend entities with a slash, i.e. do
+        not write ``[..., "/M0", ...]`` but just  ``[..., "M0", ...]``.
+        Slash-prefixed entitiy names happen to take place only in the
+        configuration dictionary (second parameter).
         
-        .. warning::
+        All these following lines are equivalent formulations for the same aim:
         
-           Attention, this is ON THE CARRIER, i.e. the path relative to the carrier.
-           Note that not all entities are on the carrier, such as the front panel!
-        
-        path is a string like ``["C", "17", "factor"]``
-        
-        .. note::
-        
-           Note that the path typically does NOT include something like "/C" or "/M0"
-           but rather "C" or "M0". In contrast, slash-prefixed entitiy names happen
-           to take place only in the configuration dictionary.
-        
-        Example:
-        
-        >>> config = hc.get_config()["config"]["/0"]  # doctest: +SKIP
-        >>> hc.set_by_path(["M0"], config["/M0"])     # doctest: +SKIP
+        >>> hc = LUCIDAC("emu:/")
+        >>> hc.set_by_path(["0", "M0"], {"elements":{0: {"ic":0.23, "k":100} } })
+        >>> hc.set_by_path("/0/M0",     {"elements":{0: {"ic":0.23, "k":100} } })
+        >>> hc.set_by_path("/0/M0//elements/0",         {"ic":0.23, "k":100})
+        >>> hc.get_circuit()["config"]["/0"]["/M0"]["elements"]["0"]
+        {'ic': 0.23, 'k': 100}
+
         """
+        path, config = self.resolve_path(path, config)
+        
         cluster_index = 0
         outer_config = {
-            "entity": [self.get_mac(), str(cluster_index)] + path,
+            "entity": [self.get_mac()] + path, #[self.get_mac(), str(cluster_index)] + path,
             "config": config
         }
         return self.query("set_circuit", outer_config)
@@ -637,8 +695,8 @@ class LUCIDAC:
            supported. A client side check is performed.
         """
         if num_channels != None:
-            if not (0 <= num_channels and num_channels < 8):
-                raise ValueError("Require 0 <= num_channels < 8")
+            if not (0 <= num_channels and num_channels <= 8):
+                raise ValueError("Require 0 <= num_channels <= 8")
             self.daq_config.num_channels = num_channels
 
         if sample_op != None: # boolean

@@ -18,9 +18,9 @@ else:
 
 #slopes = [+1, -1]
 #slopes   = linspace(-1, 1, num=20).tolist()
-slopes  = [-1,-0.5,+0.5,+1]
+slopes  = [-1,-0.5, 0, +0.5,+1]
 slopes  += [-10, -5, +5, +10]
-lanes   = range(0,17) #range(26,32)
+lanes   = range(0,32) #range(26,32)
 
 #ion()
 
@@ -53,6 +53,5 @@ for lane in lanes:
         print(*ires)
     legend() # will warn if no errors occured ;)
     savefig(f"ramp-test-{'emu' if emu else ''}{lane=}.png")
-    break # TESTING
 
 #legend().set_draggable(True)

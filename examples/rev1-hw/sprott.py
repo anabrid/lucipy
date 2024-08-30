@@ -5,18 +5,11 @@ import numpy as np
 from time import sleep
 
 #
-# Sprott on REV1 Hardware
+# Sprott attractor on REV1 Hardware
 #
 
-alpha = 1.7
 
 sprott = Circuit()
-
-# use manual clane positions as the int and mul calls
-# currently give the wrong indices.
-
-# REV1 M0 = Mint
-# REV1 M1 = MMul
 
 mx      = sprott.int(ic = .1)
 my      = sprott.int()
@@ -24,14 +17,6 @@ mz      = sprott.int()
 mxy     = sprott.mul()
 yz      = sprott.mul()
 const   = sprott.const()
-
-# use constant at lane 24
-sprott.use_constant()
-const_clane  = 14 # constant at clane 14 and 15<lane<32  #sprott.const()
-const_lane   = 16
-
-
-acl_lane = 24 # first ACL lane
 
 sprott.connect(yz, mx, weight = 10)         # x' = yz
 
@@ -50,19 +35,20 @@ sprott.connect(mz, yz.b)
 sprott.probe(mx, front_port=6)
 sprott.probe(my, front_port=7)
 
+sprott.measure(mx)
+sprott.measure(my)
+
 hc = LUCIDAC()
 
 hc.reset_circuit()
 
-# filter out M1 because there is nothing to set
-# and MCU complains if I try to configure something nonexisting
-config = sprott.generate(skip="/M1")
+config = sprott.generate()
 
 print(config)
 
 hc.set_config(config)
 
-manual_control = True
+manual_control = False
 
 if manual_control:
     hc.manual_mode("ic")
@@ -70,7 +56,6 @@ if manual_control:
     hc.manual_mode("op")
     #sleep(0.5)
 else:
-    hc.set_daq(num_channels=2, sample_rate=125_000)
     hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
     hc.set_op_time(sec=3)
 

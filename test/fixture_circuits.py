@@ -1,10 +1,40 @@
 from lucipy import Circuit, Route, Connection, Simulation
+from time import sleep
 import numpy as np
 import random
 
 sign = lambda val: abs(val) / val
 
 # This file contains *simple* circuits which can be well tested automatically
+
+def measure_ics(hc, ic, slow=True, do_assert=False):
+    c = Circuit()
+    for i in range(8):
+        I = c.int(id=i, ic=ic, slow=slow)
+        c.measure(I)
+    # so we don't want to create a lot of dummy routes, therefore we leave out
+    # the empty U-C-I and configure things manually...
+    config = c.generate()
+    for k in ["/U", "/C", "/I"]:
+        del config["/0"][k]
+
+    hc.set_circuit(config)
+    # hc.manual_mode("ic") # is expected
+    # 90ms is required for slow k0 is this waiting time is sufficient, +network delay
+    sleep(0.1)
+    measured = hc.one_shot_daq()["data"]
+    
+    int_sign = -1 # keep in mind the negating integrators
+    compare_measured = int_sign * np.array(measured)
+    
+    valid = np.allclose(ic, compare_measured, rtol=0.2, atol=0.2)
+    
+    print(f"{ic=}, {slow=}, {valid=}, {compare_measured=}")
+    
+    if do_assert:
+        assert valid
+    
+    return compare_measured, valid
 
 def circuit_constant2acl_out(coeff0 = -0.5, coeff1 = +0.5):
     # provides a circuit which puts constants onto ACL_OUT
@@ -245,6 +275,10 @@ def measure_cblock_stride(hc, lanes, test_values):
 
 
 def measure_cblock_stride_variable(hc, lanes, uin_values, coeff_values):
+    
+    # Status of this function: Untested, should probably be deleted.
+    
+    
     """
     CBlock characterization by variable input, i.e. not
     constant giver and not IC=+1 but really something where IC in [-1,+1]

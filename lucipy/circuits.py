@@ -444,7 +444,7 @@ class Routing:
     def __init__(self, routes: List[Route] = None, accept_dirty=False, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = []
-        self.u_constant = False
+        self.u_constant = None
         self.accept_dirty = accept_dirty
         if routes:
             self.add(routes)

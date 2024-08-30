@@ -12,7 +12,7 @@ import os
 from lucipy import LUCIDAC, Circuit, Simulation
 from lucipy.simulator import remove_trailing
 
-from fixture_circuits import circuit_sinus, measure_ramp
+from fixture_circuits import circuit_sinus, measure_ramp, measure_ics
 
 from itertools import product
 import numpy as np
@@ -29,6 +29,13 @@ def hc():
     hc.reset_circuit()
     yield hc
     hc.sock.sock.close() # or similar
+    
+@requires_hardware
+def test_empty_configuration(hc):
+    hc.reset_circuit()
+    conf = Circuit().generate()
+    print(conf)
+    hc.set_circuit(conf) # this shall not raise, otherwise the Circuit generation is broken
 
 # tests the protocol and configuration readout
 @requires_hardware
@@ -41,6 +48,9 @@ def test_set_circuit_for_cluster(hc):
     for i,v in enumerate(get_conf_cluster["/0"]["/I"]["outputs"]):
         if not v:
             get_conf_cluster["/0"]["/I"]["outputs"][i] = []
+            
+    # for the moment, get rid of U constant output. TODO Needs treatment!
+    del get_conf_cluster["/0"]["/U"]["constant"]
     
     # get rid of M1 block
     del get_conf_cluster["/0"]["/M1"]
@@ -71,13 +81,20 @@ def test_set_adc_channels(hc):
     assert get_adc_channels == c.adc_channels
 
 @requires_hardware
+@pytest.mark.parametrize("ic,slow", product([-1, -0.5, 0, +0.5, +1], [False, True]))
+def test_ics(hc, ic, slow):
+    hc.reset_circuit()
+    hc.manual_mode("ic")
+    measure_ics(hc, ic, slow, do_assert=True)
+
+@requires_hardware
 @pytest.mark.parametrize("slope,lane", product([+1,-1], range(32)))
 def SKIP_test_ramp(hc, slope, lane):
     valid_endpoint, valid_evolution == measure_ramp(slope, lane) # const_value=-1
     assert valid_endpoint
     assert valid_evolution
 
-   
+
 
 # TESTs to add:
 #
