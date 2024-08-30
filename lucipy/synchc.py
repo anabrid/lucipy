@@ -570,7 +570,7 @@ class LUCIDAC:
         >>> LUCIDAC.resolve_path("/0/M0")
         (['0', 'M0'], {})
         >>> LUCIDAC.resolve_path("foo/bar", "baz")
-        (['foo', 'bar'], "baz")
+        (['foo', 'bar'], 'baz')
         >>> LUCIDAC.resolve_path("foo/bar//baz", "kaz")
         (['foo', 'bar'], {'baz': 'kaz'})
         >>> LUCIDAC.resolve_path("foo/bar//bax/bay/baz", {"bir":"bur"})
@@ -578,9 +578,9 @@ class LUCIDAC:
             
         In the following real world example, all notations are equvialent:
         
-        >>> a = hc.resolve_path(["0", "M0"], {"elements":{0: {"ic":0.23, "k":100} } })
-        >>> b = hc.resolve_path("/0/M0",     {"elements":{0: {"ic":0.23, "k":100} } })
-        >>> c = hc.resolve_path("/0/M0//elements/0",         {"ic":0.23, "k":100})
+        >>> a = LUCIDAC.resolve_path(["0", "M0"], {"elements":{"0": {"ic":0.23, "k":100} } })
+        >>> b = LUCIDAC.resolve_path("/0/M0",     {"elements":{"0": {"ic":0.23, "k":100} } })
+        >>> c = LUCIDAC.resolve_path("/0/M0//elements/0",         {"ic":0.23, "k":100})
         >>> print(a)
         (['0', 'M0'], {'elements': {'0': {'ic': 0.23, 'k': 100}}})
         >>> assert a == b and b == c
