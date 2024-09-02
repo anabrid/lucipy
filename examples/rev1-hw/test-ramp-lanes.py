@@ -17,10 +17,17 @@ else:
 
 
 #slopes = [+1, -1]
-#slopes   = linspace(-1, 1, num=20).tolist()
+#slopes   = linspace(-1, 1, num=5).tolist()
+
 slopes  = [-1,-0.5, 0, +0.5,+1]
 slopes  += [-10, -5, +5, +10]
+
+#slopes = [-0.1, -0.01, 0, +0.01, +0.1]
+fake_upscale = False
+
 lanes   = range(0,32) #range(26,32)
+
+slow = False
 
 #ion()
 
@@ -42,7 +49,7 @@ for lane in lanes:
     clf()
     for slope in slopes:
         hc.reset_circuit()
-        valid_endpoint, valid_evolution, x = measure_ramp(hc, slope, lane, const_value=-1, slow=True)
+        valid_endpoint, valid_evolution, x = measure_ramp(hc, slope, lane, const_value=-1, slow=slow, fake_upscale=fake_upscale)
         
         label = f"{slope=}" if not valid_endpoint or not valid_evolution else None
         title(f"{lane=} Ramp test")

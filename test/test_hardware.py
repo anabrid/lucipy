@@ -54,6 +54,10 @@ def test_set_circuit_for_cluster(hc):
     
     # get rid of M1 block
     del get_conf_cluster["/0"]["/M1"]
+    
+    # get rid of SH block
+    if "/SH" in get_conf_cluster["/0"]:
+        del get_conf_cluster["/0"]["/SH"]
             
     print(f"{set_conf_cluster['/0']=}")
     print(f"{get_conf_cluster['/0']=}")

@@ -6,32 +6,35 @@ from time import sleep
 # M0 = M-Block INT
 # M1 = M-Block MUL
 
-
-ramp = Circuit()
-
-integrator = 2
-lane = 7
-
-#ic, slope = -1, +1
-ic, slope = +1, -1
-
-i = ramp.int(id=integrator, ic=ic)
-c = ramp.const(1)
-
-ramp.route(c, lane, slope, i.a)
-
-ramp.probe(i, front_port=6)
-channel = ramp.measure(i)
-print(f"{channel=}")
-
 hc = LUCIDAC()
 print(hc)
 hc.reset_circuit()
 
+integrator = 2
+lane = 0
+
+#ic, slope = -1, +1
+ic, slope = +1, -1
+
+ramp = Circuit()
+
+i = ramp.int(id=integrator, ic=ic)
+j= ramp.int(id=integrator+1, ic=ic)
+c = ramp.const(1)
+
+ramp.route(c, lane, slope, i.a)
+ramp.route(c, lane+1, 10*slope, j.a)
+
+ramp.probe(i, front_port=5)
+ramp.probe(j, front_port=6)
+
+channel = ramp.measure(i)
+print(f"{channel=}")
+
 config = ramp.generate(skip="/M1")
 hc.set_config(config)
 
-manual_control = False
+manual_control = True
 
 if manual_control:
     hc.manual_mode("ic")

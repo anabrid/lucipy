@@ -5,7 +5,7 @@ from itertools import product
 
 
 import sys
-sys.path.append("../test")
+sys.path.append("../../test")
 from fixture_circuits import measure_cblock, measure_cblock_stride_variable
 
 
@@ -20,9 +20,10 @@ hc.manual_mode("ic")
 
 lanes = range(32) # this is not changeable at this test!
 
-simple_uin_one_output = False
+simple_uin_one_output = True
 if simple_uin_one_output:
-    test_steps = linspace(-1, 1, num=6) # dt=0.1
+    upscaling = 1 # cannot work because value 10 -> ID -> overload :-)
+    test_steps = upscaling * linspace(-1, 1, num=6) # dt=0.1
     rmat = np.ndarray((len(test_steps), len(lanes)))
 
     for i,val in enumerate(test_steps):

@@ -499,7 +499,7 @@ class LUCIDAC:
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
-    def set_circuit(self, carrier_config):
+    def set_circuit(self, carrier_config, **further_commands):
         """
         This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
         in particular the :func:`~lucipy.circuits.Circuit.generate` method can help to
@@ -515,7 +515,8 @@ class LUCIDAC:
         """
         outer_config = {
             "entity": [self.get_mac()], # str(cluster_index)], # was "0", NOT "/0"
-            "config": carrier_config
+            "config": carrier_config,
+            **further_commands
         }
         #print(outer_config)
 

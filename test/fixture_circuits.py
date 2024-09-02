@@ -114,7 +114,7 @@ def measure_sinus(hc, i0, i1, l0, l1):
     return valid, x_measured, y_measured, x_expected, y_expected
 
 
-def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=False):
+def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=False, fake_upscale=False):
     # This circuit uses the constant giver for integrating over a constant
     
     upscaling = abs(slope) > 1
@@ -155,6 +155,11 @@ def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=Fals
     channel = ramp.measure(i)
     
     conf = ramp.generate(skip="/M1")
+    
+    if fake_upscale:
+        for ii in range(32):
+            conf["/0"]["/I"]["upscaling"][ii] = True
+    
     hc.set_circuit(conf)
     ic_time_ns = 90_000_000 if slow else 200_000
     op_time_ns = 200_000 * slow_time/downscaling
@@ -166,7 +171,7 @@ def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=Fals
     t_hw = np.linspace(0, t_final, len(x_hw))
     
     if len(x_hw) <= 1:
-        print(f"Warning: Did not get any real data from LUCIDAC: {x_hw=}")
+        print(f"Warning!! Did not get any real data from LUCIDAC: {x_hw=}")
     
     # Attention: The simulation will interpolate on the measurements of the real computer.
     #            If no real aquisition took place, the difference will not be useful.
@@ -183,7 +188,8 @@ def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=Fals
 
     # Large tolerance mainly because of shitty non-streaming
     # data aquisition
-    assert np.isclose(x_sim[-1], expected_result, atol=0.01)
+    if len(x_hw) > 1:
+        assert np.isclose(x_sim[-1], expected_result, atol=0.01)
     valid_endpoint = np.isclose(x_hw[-1],  expected_result, atol=0.3)
     valid_evolution = np.allclose(x_sim, x_hw, atol=0.2)
     
