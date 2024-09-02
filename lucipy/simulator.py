@@ -359,12 +359,7 @@ class Simulation:
         ics = ics_sign * np.array(ics)
         
         from scipy.integrate import solve_ivp
-        data = solve_ivp(lambda t,state: self.rhs(t,state,clip), [0, t_final], ics, **kwargs_for_solve_ivp)
-        
-        #assert data.status == 0, "ODE solver failed"
-        #assert data.t[-1] == t_final
-        
-        return data
+        return solve_ivp(lambda t,state: self.rhs(t,state,clip), [0, t_final], ics, **kwargs_for_solve_ivp)
 
 
 def find(element, structure):
@@ -669,6 +664,11 @@ class Emulation:
         #print(f"{t_final_sec=} {t_final_sec=} {samples_per_second=} {num_samples=} {sampling_times.shape=}")
         sim = Simulation(circuit, realtime=True)
         res = sim.solve_ivp(t_final_sec, dense_output=True)
+        
+        if res.status != 0:
+            raise ValueError(f"ODE Solver failed: {res}")
+        #assert data.t[-1] == t_final
+        
         states_sampled = res.sol(sampling_times).T
         assert states_sampled.shape == (num_samples, 8)
         

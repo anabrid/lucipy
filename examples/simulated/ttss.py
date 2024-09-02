@@ -43,6 +43,10 @@ ttss.connect(mx, xx.b)
 ttss.connect(xx, mxxx.a)                    # mxxx = -x^3
 ttss.connect(mx, mxxx.b)
 
+mt = ttss.mul()
+ttss.connect(mx, mt.a)
+ttss.connect(const, mt.b)
+
 # Run simulation
 sim     = Simulation(ttss)                  # Create simulation object
 t_final = 1000
@@ -51,14 +55,20 @@ t_final = 1000
 # the solution as does the interval between time steps.
 result  = sim.solve_ivp(t_final, 
                         method = 'LSODA', 
-                        t_eval = np.linspace(0, t_final, num = 1000000))
+                       # t_eval = np.linspace(0, t_final, num = 1000000))
+                       )
 
 # Get data from x- and y-integrator
 mx_out, my_out, mz_out = result.y[mx.id], result.y[my.id], result.y[mz.id]
 
-plt.plot(mx_out, mz_out)                    # Create a phase space plot.
-#plt.plot(mx_out)
-#plt.plot(my_out)
-#plt.plot(mz_out)
+print("Computing mt_out...")
+mt_out = [ sim.Mul_out(yt)[mt.id] for yt in result.y.T ]
+print("Done!")
+
+#plt.plot(mx_out, mz_out)                    # Create a phase space plot.
+plt.plot(result.t, mx_out)
+plt.plot(result.t, my_out)
+plt.plot(result.t, mz_out)
+plt.plot(result.t, mt_out)
 plt.show()                                  # Display the plot.
 

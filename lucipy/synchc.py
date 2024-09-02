@@ -368,7 +368,7 @@ class LUCIDAC:
         ping help
         reset_circuit set_circuit get_circuit
         get_entities
-        start_run
+        stop_run
         one_shot_daq
         manual_mode
         net_get net_set net_reset net_status
@@ -434,21 +434,27 @@ class LUCIDAC:
         self.sock.send(envelope)
         return envelope
 
-    def query(self, msg_type , msg={}):
-        "Sends a query and waits for the answer, returns that answer"
-        envelope = dotdict(self.send(msg_type, msg))
+    def _recv(self, sent_envelope, ignore_run_state_change=True):
         resp = dotdict(self.sock.read())
-        if envelope == resp:
+        if ignore_run_state_change and "type" in resp and resp.type == "run_state_change":
+            log.info(f"run_state_change: {resp.msg}")
+            return self._recv(sent_envelope, ignore_run_state_change=True)
+        if sent_envelope == resp:
             # This is a serial socket replying first what was typed. Read another time.
-            resp = dotdict(self.sock.read())
+            return self._recv(sent_envelope, ignore_run_state_change=ignore_run_state_change)
         if "error" in resp:
             raise RemoteError(resp)
-        if resp.type == envelope.type:
+        if resp.type == sent_envelope.type:
             # Do not show the empty message, in case of success.
             return resp.msg if resp.msg != {} else None
         else:
             log.error(f"req(type={envelope.type}) received unexpected: {resp=}")
             return resp
+
+    def query(self, msg_type , msg={}, ignore_run_state_change=True):
+        "Sends a query and waits for the answer, returns that answer"
+        envelope = dotdict(self.send(msg_type, msg))
+        return self._recv(envelope)
     
     def slurp(self):
         """
@@ -713,11 +719,12 @@ class LUCIDAC:
         return self.daq_config
 
     def set_run(self, *,
-            halt_on_external_trigger = False,
-            halt_on_overload = True,
+            halt_on_external_trigger = None,
+            halt_on_overload = None,
             ic_time = None,
             op_time = None,
             no_streaming = None,
+            repetitive = None,
             ):
         """
         :param halt_on_external_trigger: Whether halt the run if external input triggers
@@ -730,14 +737,18 @@ class LUCIDAC:
            option for this method. Note that by a current limitation in the hardware, only
            op_times < 1sec are supported.
         """
-        self.run_config.halt_on_external_trigger = halt_on_external_trigger
-        self.run_config.halt_on_overload = halt_on_overload
-        if ic_time:
+        if halt_on_external_trigger != None:
+            self.run_config.halt_on_external_trigger = halt_on_external_trigger
+        if halt_on_overload != None:
+            self.run_config.halt_on_overload = halt_on_overload
+        if ic_time != None:
             self.run_config.ic_time = ic_time
-        if op_time:
+        if op_time != None:
             self.run_config.op_time = op_time
         if no_streaming != None:
             self.run_config.no_streaming = no_streaming
+        if repetitive != None:
+            self.repetitive = repetitive
         return self.run_config
 
     def start_run(self) -> Run:

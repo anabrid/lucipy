@@ -20,6 +20,148 @@ of Math block elements. This section concentrates on the approach provided
 by :py:class:`.Simulation`. Furher approaches are discussed in the section
 :ref:`sim-variants`.
 
+Frequent issues when using the Simulator
+----------------------------------------
+
+Misunderstanding Scipy's solve_ivp
+..................................
+
+Note that scipy's `solve_ivp <https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html>`_
+might lead to surprising results if you never used
+it before. In order to not misinterpret the results, a few rules should be kept
+in mind:
+
+First of all, the ODE solver can fail. Typical examples are ill-configured circuits/equations
+where infinite values and NaNs enter the simulation domain. Therefore, before
+looking into other errors, better first check the ``status`` field in the result:
+
+::
+
+  res = Simulation(circuit).solve_ivp(t_final)
+  assert res.status == 0, "ODE solver failed"
+  assert res.t[-1] == t_final
+
+Second, ``solve_ivp`` uses method for automatically determining the ideal time step sizes
+adaptively. Normally this is very clever and thus provides only a small number of
+support points within the domain. Therefore, you are urged to use the ``res.t`` field to
+get an idea of the times where the solution vector ``res.y`` is defined on. In particular,
+a frequent mistake is a matplotlib command such as
+
+::
+
+   plot(res.y[0])
+
+which will do linear interpolation between the support points. In problems where ``solve_ivp``
+could optimize a lot, this will yield very wrong looking results. Instead, plot at least
+with
+
+::
+
+  plot(res.t, res.y[0], "o-")
+
+but ideally, you want to use the ``dense_output`` interpolation property of the ``solve_ivp``
+code. Consider this example:
+    
+    
+.. plot::
+  :include-source:
+
+  from lucipy import Circuit, Simulation
+  import matplotlib.pyplot as plt
+  import numpy as np
+
+  c = Circuit()
+  i0, i1, i2 = c.ints(3)
+  cnst = c.const()
+  c.connect(cnst, i0, weight=-1)
+  c.connect(i0, i1, weight=-2)
+  c.connect(i1, i2, weight=-3)
+
+  res = Simulation(c).solve_ivp(1, dense_output=True)
+
+  p0 = plt.plot(res.t, res.y[0], "o--", label="$t$")
+  p1 = plt.plot(res.t, res.y[1], "o--", label="$t^2$")
+  p2 = plt.plot(res.t, res.y[2], "o--", label="$t^3$")
+  
+  t = np.linspace(0, 1)  # a "denser" array of times
+  densey = res.sol(t) # interpolated solution on denser time
+  
+  plt.plot(t, densey[0], color=p0[0].get_color())
+  plt.plot(t, densey[1], color=p1[0].get_color())
+  plt.plot(t, densey[2], color=p2[0].get_color())
+  
+  plt.title("Computing polynoms with LUCIDAC")
+  plt.xlabel("Simulation time")
+  plt.ylabel("Analog units")
+  plt.legend()
+
+The little demonstration computed a few powers of the linear curve $f(t)=t$ by chaining
+a few integrators. 
+In this extreme example, the three signals show each the naively interpolated solution
+(dashed line) on the few support points (dots). They are, however, completely different
+then the actual solution (solid lines).
+  
+
+Getting access to further system properties
+...........................................
+
+The simulator always keeps all 8 integrators as the system state. That means
+the solution vector ``y`` in the object returned by ``solve_ivp`` is always of
+shape ``(8, num_solution_points)``.
+
+Despite it can be handy to index this by the computing elements defined before,
+as in
+
+::
+
+   circuit = Circuit()
+   i = circuit.int()
+   m = circuit.mul()
+   
+   # actual circuit skipped in this example
+   
+   res = Simulation(circuit).solve_ivp(some_final_time)
+   evolution_for_i = res.y[i.id] # this works
+   evolution_for_m = res.y[m.id] # this does NOT work!
+
+Note how ``i.id`` only resolves to an index which "by coincidence" is within the
+range ``[0,8]`` which both are fine for addressing within the MIntBlock and the 
+solution vector.
+
+However, ``m.id`` also resolves to such an index which is however meaningless when
+applied to the MIntBlock! Since the unused integrators in the simulation have a
+zero input, their output is always zero (``0.0``) and thus the resulting error
+might assume that the multiplier results in zero output, which is a wrong
+interpretation!
+
+The correct way to get access to the multipliers is the
+:meth:`~lucipy.simulator.Simulation.Mul_out` method, i.e. in this way:
+
+::
+
+   circuit = Circuit()
+   i = circuit.int()
+   m = circuit.mul()
+   
+   # actual circuit skipped in this example
+   
+   sim = Simulation(circuit)
+   res = sim.solve_ivp(some_final_time)
+   evolution_for_i = res.y[i.id] # this works
+   evolution_for_m = [ sim.Mul_out(ryt)[m.id] for ryt in res.y.T ] # this works
+
+Similar mapping methods available to obtain the computer state, derived from the
+integrator state, exist, such as
+
+- :meth:`~lucipy.simulator.Simulation.adc_values`: Obtain the output of the eight ADCs.
+- :meth:`~lucipy.simulator.Simulation.acl_out_values`: Obtain the output at the front
+  panel (``ACL_OUT``).
+- :meth:`~lucipy.simulator.Simulation.mblocks_output`: Obtain the output of all two
+  MBlocks, i.e. both the integrator and the multiplier in a single array.
+
+Note that if you decide to use the Emulator API, you will always only get access to the
+ADC values, the same way as in a real LUCIDAC.
+
 
 Guiding principle of this simulator
 -----------------------------------
