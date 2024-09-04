@@ -21,7 +21,10 @@ hc.manual_mode("ic")
 lanes = range(32) # this is not changeable at this test!
 
 upscaling = 1 # cannot work because value 10 -> ID -> overload :-)
-test_steps = upscaling * linspace(-10, 10, num=20) # dt=0.1
+
+#test_steps = upscaling * linspace(-10, 10, num=20) # dt=0.1
+test_steps = [0]
+
 rmat = np.ndarray((len(test_steps), len(lanes)))
 
 for i,val in enumerate(test_steps):
@@ -47,7 +50,7 @@ ion()
 
 # make it more convenient
 measured = rmat.T
-expected = test_steps[::-1] / 10 # if upscaling was used
+expected = test_steps[::-1] # / 10 # if upscaling was used
 
 abs_error = measured - expected
 rel_error = measured / expected

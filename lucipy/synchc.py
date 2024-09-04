@@ -387,7 +387,8 @@ class LUCIDAC:
                 endpoint_url = detect(single=True)
                 if not endpoint_url:
                     raise ValueError("No endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
-                
+        
+        endpoint = Endpoint(endpoint_url)
         socket = endpoint2socket(endpoint_url)
         self.sock = jsonlines(socket)
         self.req_id = 50
@@ -411,6 +412,10 @@ class LUCIDAC:
             sample_op_end = True,
             sample_rate = 500_000,
         )
+        
+        # remember credentials for later use
+        self.user = endpoint.user
+        self.password = endpoint.password
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"

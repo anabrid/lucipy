@@ -40,7 +40,7 @@ for route in vdp.routes:
 
 # Run simulation
 sim     = Simulation(vdp)                  # Create simulation object
-t_final = 20
+t_final = 40
 
 #  The integration scheme used has a significant impact on the correctness of 
 # the solution as does the interval between time steps.
@@ -52,7 +52,13 @@ result  = sim.solve_ivp(t_final,
 # Get data from x- and y-integrator
 mdy_out, y_out = result.y[mdy.id], result.y[y.id]
 
-plt.plot(mdy_out)
-plt.plot(y_out)
+dso_colors = ["#fffe05", "#02faff", "#f807fb", "#007bff" ] # Rigol DHO14 ;)
+plt.style.use("dark_background")
+plt.title("LUCIDAC Simulation: Van-der-Pol oscillator")
+plt.plot(result.t, mdy_out, label="mdy", color=dso_colors[0])
+plt.plot(result.t, y_out, label="y_out", color=dso_colors[1])
+plt.axhline(0, color="white")
+plt.xlabel("Simulation time [100us]")
+plt.legend()
 plt.show()                                  # Display the plot.
 

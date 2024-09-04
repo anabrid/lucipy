@@ -79,8 +79,10 @@ class Endpoint:
     default_tcp_port = 5732
     
     def __init__(self, endpoint):
+        if isinstance(endpoint, Endpoint):
+            endpoint = endpoint.url()
         if not isinstance(endpoint, str):
-            endpoint = str(endpoint)
+            raise ValueError("Expecting endpoint URL as string")
             
         result = urllib.parse.urlparse(endpoint)
         #result = re.match("(?P<scheme>[a-zA-Z0-9]+):(?P<sep>/?/?)(?P<userpass>[^@:]+(:[^@]+)?)...
@@ -108,8 +110,8 @@ class Endpoint:
             # however serial:/dev/foo gets correct "/dev/foo". This corrects the double slash version.
         #    self.host = "/" + self.host
         
-        if not self.scheme:
-            raise ValueError(f"Invalid Endpoint '{endpoint}' is not a string-encoded URL.")
+        #if not self.scheme:
+        #    raise ValueError(f"Invalid Endpoint '{endpoint}' is not a string-encoded URL.")
 
     @staticmethod
     def fromDevice(device_name):
@@ -122,9 +124,8 @@ class Endpoint:
         "Initialize for a TCP addr/port address tuple"
         return Endpoint(f"tcp://{addr}" + (f":{port}" if port else ""))
     
-    def __repr__(self):
-        s = 'Endpoint("'
-        s += self.scheme + ":"
+    def url():
+        s = self.scheme + ":"
         if self.host and self.host[0] != "/":
             s += "//"
         if self.user and not self.password:
@@ -138,8 +139,10 @@ class Endpoint:
             s += ":" + str(self.port)
         if self.args:
             s += "?" + "&".join([f"{k}={v}" for k,v in self.args.items()])
-        s += '")'
         return s
+    
+    def __repr__(self):
+        return 'Endpoint("' + self.url() +  '")'
     
     def __str__(self):
         return self.__repr__()
