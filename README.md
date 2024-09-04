@@ -12,7 +12,7 @@ This is [open source code released under MIT/GPL](LICENSE.md) at
 https://github.com/anabrid/lucipy and published to the Python Package Index
 at https://pypi.org/project/lucipy/.
 
-## Installlation
+## Installation
 
 Assuming you have a working Python installation:
 

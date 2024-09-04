@@ -45,7 +45,7 @@ else:
 
 # always:
 hc.run_config.repetitive = True
-hc.run_config.no_streaming = True
+hc.run_config.streaming = False
 hc.run_config.write_run_state_changes = False
 
 hc.start_run()

@@ -39,7 +39,7 @@ def run_with(op_time_us, sample_rate_per_sec):
     hc.set_op_time(us=op_time_us)
     
     # activate Non-FlexIO code
-    #hc.run_config.no_streaming = True
+    #hc.run_config.streaming = False
     
     optime_ns = hc.run_config.op_time 
     optime_us = optime_ns / 1000

@@ -75,6 +75,16 @@ class Endpoint:
 
     >>> Endpoint("EMU:")
     Endpoint("emu:")
+
+    An example of an endpoint which uses all fields:
+
+    >>> e = Endpoint("TCP://myuser:mypass@FOO.bar:4711?flitz=bums&baz=bla")
+    >>> e.user
+    'myuser'
+    >>> e.args
+    {'flitz': 'bums', 'baz': 'bla'}
+    >>> e
+    Endpoint("tcp://myuser:foo.bar:4711?flitz=bums&baz=bla")
     """
     default_tcp_port = 5732
     
@@ -89,11 +99,24 @@ class Endpoint:
 
         #: Scheme, such as "serial", "tcp", etc.
         self.scheme = result.scheme
-        self.user = result.username # None is valid
-        self.password = result.password # None is valid
+        #: Username for login, if present. None is a valid value.
+        self.user = result.username
+        #: Password for login, if present. None is a valid value.
+        self.password = result.password
+        #: Host or device name. Note that hostnames are transfered to lowercase while
+        #: pathnames will not.
         self.host = (result.hostname or "") + (result.path or "")
+        #: TCP/IP Port as integer. If not given, defaults to default TCP port.
         self.port = int(result.port or self.default_tcp_port)
-        self.args = urllib.parse.parse_qs(result.query)
+        #: Further query arguments from the URL
+        self.args = urllib.parse.parse_qs(result.query, keep_blank_values=True)
+        # improve for queries such as ?foo -> should result in foo=True
+        #                             ?foo=bar -> should not result in foo=["bar"] but foo=bar
+        for k in self.args.keys():
+            if len(self.args[k]) == 0:
+                self.args[k] = True
+            if len(self.args[k]) == 1:
+                self.args[k] = self.args[k][0] # unwrap
 
         # fixes for serial scheme, mainly neccessary because
         # result.hostname is lowercased, which is bad for "ttyACM0" or "COM0".

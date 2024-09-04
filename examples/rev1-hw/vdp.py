@@ -18,7 +18,7 @@ c   = vdp.const()
 
 vdp.connect(fb, mdy, weight = -eta)
 vdp.connect(y,  mdy, weight = -0.5)
-vdp.connect(c,  mdy, weight = +0.1) # HAVE TO ADD THIS
+#vdp.connect(c,  mdy, weight = +0.1) # HAVE TO ADD THIS
 
 vdp.connect(mdy, y, weight = 2)
 
@@ -51,6 +51,7 @@ for route in vdp.routes:
     pass
 
 hc = LUCIDAC()
+hc.sock.sock.debug_print = True
 hc.reset_circuit()
 
 config = vdp.generate()
@@ -64,7 +65,7 @@ print(json.dumps(config))
 
 hc.set_circuit( config )
 
-static_analysis = True
+static_analysis = False
 
 if static_analysis:
     hc.manual_mode("ic")
@@ -83,7 +84,7 @@ else:
         hc.manual_mode("op")
     else:
         #hc.run_config.repetitive = True
-        hc.run_config.no_streaming = True
+        hc.run_config.streaming = False
         #hc.run_config.write_run_state_changes = False
         
         hc.run_config.ic_time_us = 200
