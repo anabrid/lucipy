@@ -3,7 +3,7 @@ PYTHON=python3
 PYTEST=$(PYTHON) -m pytest
 
 dist:
-	rm -r dist
+	rm -fr dist
 	python -m build --wheel
 	python -m build --sdist
 	twine upload dist/*
