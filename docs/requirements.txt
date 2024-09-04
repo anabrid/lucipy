@@ -2,6 +2,7 @@
 sphinx-rtd-theme
 #sphinxcontrib-programoutput
 #recommonmark
-#nbsphinx
+nbsphinx
+scipy
 #ipython
 #sphinxcontrib-svg2pdfconverter
