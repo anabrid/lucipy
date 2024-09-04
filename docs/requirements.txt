@@ -1,4 +1,9 @@
-# for sphinx
+# This requirements file is *ONLY* for sphinx in order to be able
+# to reproducably build the docs.
+
+# the version constraint is probably only relevant for github CI
+sphinx>=7.3.7
+
 sphinx-rtd-theme
 #sphinxcontrib-programoutput
 #recommonmark
@@ -7,5 +12,5 @@ scipy
 #ipython
 #sphinxcontrib-svg2pdfconverter
 
-# the following is only for github CI
+# the following is most likely only relevant for github CI
 markupsafe>=2.1.5
