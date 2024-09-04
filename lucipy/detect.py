@@ -124,7 +124,7 @@ class Endpoint:
         "Initialize for a TCP addr/port address tuple"
         return Endpoint(f"tcp://{addr}" + (f":{port}" if port else ""))
     
-    def url():
+    def url(self):
         s = self.scheme + ":"
         if self.host and self.host[0] != "/":
             s += "//"
