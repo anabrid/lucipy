@@ -17,11 +17,11 @@ mz    = r.int()
 prod  = r.mul()
 const = r.const(1)
 
-# TODO: Cannot use r.const(0) on this list of usable
+# TODO: Cannot use r.const(0) on the following list of usable
 #       lanes because Routing.next_free_lane does not properly
 #       hand over the list of available lanes but works on
 #       naive indices, without the mapping.
-
+#
 #r.lanes_constraint = [ 1, 2, 3, 5, 6, 10, 11, 12, 14 ]
 #r.lanes_constraint.append(17) # for the constant
 
@@ -42,8 +42,8 @@ r.connect(const, prod.b, weight = -0.3796)
 r.probe(x, front_port=6)
 r.probe(my, front_port=7)
 
-r.measure(x)
-r.measure(my)
+#r.measure(x)
+#r.measure(my)
 
 hc = LUCIDAC()
 
@@ -57,7 +57,7 @@ print(config)
 
 hc.set_config(config)
 
-manual_control = False
+manual_control = True
 
 if manual_control:
     hc.manual_mode("ic")

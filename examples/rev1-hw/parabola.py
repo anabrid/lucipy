@@ -14,11 +14,11 @@ l0, l1 = 0, 1
 test.route(c, l0, -.1, x)
 test.route(x, l1, -.4, y)
 
-test.probe(x, front_port=5)
-test.probe(y, front_port=6)
+#test.measure(x)
+#test.measure(y)
 
-test.measure(x)
-test.measure(y)
+ramp.probe(x, front_port=6)
+ramp.probe(y, front_port=7)
 
 
 hc = LUCIDAC()
@@ -36,7 +36,7 @@ hc.set_circuit(
 #    calibrate_mblock = True,
 )
 
-manual_control = False
+manual_control = True
 
 if manual_control:
     hc.manual_mode("ic")
@@ -47,14 +47,15 @@ else:
     hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
     hc.set_op_time(us=2000)
 
-    run = hc.start_run()
+    # for k0 slow:
+    #hc.run_config.ic_time_ms = 10
+    #hc.run_config.op_time_ms = 20
+    #hc.run_config.op_time = 0 # additional ns
+    #hc.run_config.ic_time = 0 # additional ns
 
-    from pylab import *
-    x, y = array(run.data()).T
-
-    figure()
-    plot(x,"-")
-    plot(y)
-    show()
+    # always:
+    hc.run_config.repetitive = True
+    hc.run_config.no_streaming = True
+    hc.run_config.write_run_state_changes = False
 
 

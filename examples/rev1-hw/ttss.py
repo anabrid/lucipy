@@ -4,7 +4,7 @@
 # https://analogparadigm.com/downloads/alpaca_44.pdf for details.
 #
 
-from lucipy import Circuit, Simulation
+from lucipy import Circuit, Simulation, LUCIDAC
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,12 +16,13 @@ mu      = 0.04
 
 ttss = Circuit()
 
+
 mx    = ttss.int(ic = 1)
 my    = ttss.int()
 mz    = ttss.int(slow = True)               # Set k_0 = 100 (default is 10^4)
 xx    = ttss.mul()
 mxxx  = ttss.mul()
-const = ttss.const()
+const = ttss.const(1)
 
 ttss.connect(my, mx)
 ttss.connect(xx, mx, weight = 10 * c2)
@@ -34,7 +35,9 @@ ttss.connect(mz, my, weight = epsilon)
 # 10^4. Effectively the 100 cancels out with epsilon * epsilon, but this 
 # notation makes it possible to vary mu and epsilon without having to rescale 
 # the z integrator.
-ttss.connect(const, mz, weight = epsilon * epsilon * mu * 100)
+
+ttss.route(const, 7, epsilon * epsilon * mu * 100, mz)
+
 ttss.connect(my, mz, weight = epsilon * epsilon * c1 * 100)
 
 ttss.connect(mx, xx.a)                      # xx = x^2
@@ -43,29 +46,25 @@ ttss.connect(mx, xx.b)
 ttss.connect(xx, mxxx.a)                    # mxxx = -x^3
 ttss.connect(mx, mxxx.b)
 
-mt = ttss.mul()
-ttss.connect(mx, mt.a)
-ttss.connect(const, mt.b)
+ttss.probe(mx, front_port=5)
+ttss.probe(my, front_port=6)
+ttss.probe(mz, front_port=7)
 
-# Run simulation
-sim     = Simulation(ttss)                  # Create simulation object
-t_final = 1000
+print(ttss)
 
-#  The integration scheme used has a significant impact on the correctness of 
-# the solution as does the interval between time steps.
-result  = sim.solve_ivp(t_final, 
-                        method = 'LSODA', 
-                       # t_eval = np.linspace(0, t_final, num = 1000000))
-                       )
+coeff_correction_factors = [1.04708792, 1.02602164, 1.04792514, 1.03813069, 1.04608511, 1.04093402, 1.0355061 , 1.04633566, 1.05569066, 1.05238481, 1.04134752, 1.04767382, 1.04842814, 1.04993994, 1.0452508 , 1.06047412, 1.07139706, 1.04458435, 1.04043818, 1.05263836, 1.0525538 , 1.04283895, 1.04725535, 1.05407749, 1.09566963, 1.0882099 , 1.09860859, 1.31937427, 1.0917451 , 1.09011065, 1.09429735, 1.09065486]
 
-# Get data from x- and y-integrator
-mx_out, my_out, mz_out = result.y[mx.id], result.y[my.id], result.y[mz.id]
+for route in ttss.routes:
+    route.coeff *= coeff_correction_factors[route.lane]
 
-#plt.plot(mx_out, mz_out)                    # Create a phase space plot.
-plt.plot(result.t, mx_out, label="-x")
-plt.plot(result.t, my_out, label="-y")
-plt.plot(result.t, mz_out, label="-z")
-plt.axhline(0, color="black")
-plt.legend()
-plt.show()                                  # Display the plot.
+print(ttss)
 
+hc = LUCIDAC()
+
+conf = ttss.generate()
+hc.set_circuit(conf)
+
+hc.manual_mode("ic")
+from time import sleep
+sleep(0.2)
+hc.manual_mode("op")

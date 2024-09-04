@@ -206,7 +206,7 @@ class emusocket:
     def __repr__(self):
         return f"emu:/?callback={self.callback}"
 
-class jsonlines():
+class jsonlines:
     "Middleware that speaks dictionaries at front and JSON at back"
     def __init__(self, actual_socket):
         self.sock = actual_socket
@@ -236,17 +236,15 @@ class jsonlines():
             yield self.read()
 
 def endpoint2socket(endpoint_url: typing.Union[Endpoint,str]) -> typing.Union[tcpsocket,serialsocket]:
-    "Provides the appropriate socket for a given endpoint"
+    "Provides the appropriate *synchronous* socket for a given endpoint"
     endpoint = Endpoint(endpoint_url)
-    if endpoint.asDevice(): # serial:/dev/foo
-        return serialsocket(endpoint.asDevice())
-    elif endpoint.asURL().scheme.lower() == "tcp": # tcp://192.168.1.2:5732
-        url = endpoint.asURL()
-        tcp_port = endpoint.default_tcp_port if not url.port else url.port
-        return tcpsocket(url.hostname, tcp_port) # TODO: Get auto_reconnect from a query string
-    elif endpoint.asURL().scheme.lower() in ["emu","sim"]: # emu:/ or emu:/?debug
-        return emusocket(debug="debug" in endpoint.asURL().query)
-    elif endpoint.asURL().scheme.lower() == "zeroconf":
+    if endpoint.scheme == "serial": # serial:/dev/ttyFooBar
+        return serialsocket(endpoint.host)
+    elif endpoint.scheme == "tcp": # tcp://192.168.1.2:5732
+        return tcpsocket(endpoint.host, endpoint.port, auto_reconnect="auto_reconnect" in endpoint.args)
+    elif endpoint.scheme in ["emu","sim"]: # emu:/ or emu:/?debug
+        return emusocket(debug="debug" in endpoint.args)
+    elif endpoint.scheme == "zeroconf":
         endpoint_url = detect(single=True)
         if not endpoint_url:
             raise ValueError("zeroconf:/ explicitely asked for, but no endpoint provided as argument or in ENV variable and could also not discover something on USB or in Network.")
@@ -448,7 +446,7 @@ class LUCIDAC:
             # Do not show the empty message, in case of success.
             return resp.msg if resp.msg != {} else None
         else:
-            log.error(f"req(type={envelope.type}) received unexpected: {resp=}")
+            log.error(f"req(type={sent_envelope.type}) received unexpected: {resp=}")
             return resp
 
     def query(self, msg_type , msg={}, ignore_run_state_change=True):

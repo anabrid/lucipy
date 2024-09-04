@@ -9,7 +9,8 @@ happens typically within a few hundred milliseconds. If you want to wait for mor
 then one device, use the --all option.
 """
 
-import asyncio, logging, socket, sys, argparse, inspect, ast, pathlib, time, collections, itertools
+# all python included
+import asyncio, logging, socket, sys, argparse, inspect, ast, pathlib, time, collections, itertools, urllib, re
 from typing import Any, Optional, List, cast, Iterator
 
 try:
@@ -38,62 +39,110 @@ v   = lambda msg: log(1, msg)
 vv  = lambda msg: log(2, msg)
 
 
-# python included
-import dataclasses, urllib, re
-
-@dataclasses.dataclass() # frozen=True
 class Endpoint:
-  """
-  A LUCIDAC endpoint is actually something like an URI. There
-  is no proper URI object in python so this is where we are.
+    """
+    This class models the LUCIDAC/REDAC endpoint URI convention in lucipy.
+    Given there is no proper URI object in python, we make use of
+    ``urllib.urlparse``. This class is used for instance in
+    :func:`lucipy.synchc.endpoint2socket`.
 
-  cf. urllib.urlparse
-  @see synchc.endpoint2socket
+    Create instances either directly or via helpers which prepend
+    the correct scheme:
 
-  >>> Endpoint.fromDevice("/dev/ttyACM0")
-  Endpoint("serial://dev/ttyACM0")
-  >>> Endpoint.fromJSONL("localhost", 1234).parse().hostname
-  'localhost'
-  """
-  endpoint: str # just the whole string
-  default_tcp_port = 5732
-  
-  def __init__(self, endpoint):
-    if isinstance(endpoint, Endpoint): # avoid nesting
-      self.endpoint = endpoint.endpoint
-    elif isinstance(endpoint, str):
-      self.endpoint = endpoint
-    else:
-      raise ValueError(f"{endpoint} is not a string")
-  
-  def parse(self):
-    "This is likely to fail for serial:/ things"
-    return urllib.parse.urlparse(self.endpoint)
+    >>> Endpoint("tcp://123.123.123.123:7890")
+    Endpoint("tcp://123.123.123.123:7890")
+    >>> Endpoint.fromJSONL("localhost", 1234)
+    Endpoint("tcp://localhost:1234")
 
-  def asDevice(self) -> Optional[str]:
-    "Returns device name if device, else None"
-    posix = re.match("serial:/?(/.+)", self.endpoint)
-    win = re.match("serial:/?/(.+)", self.endpoint)
-    if posix: return posix.group(1)
-    if win: return win.group(1)
-    return None
+    For serial devices, there is a little extra work done ontop of
+    URL parsing, which makes the syntax less weird in contexts where
+    URIs are typically not used. Serial devices just don't follow the
+    double slash convention but more a kio/gfs single slash
+    convention:
 
-  def asURL(self):
-    "returns a ``urllib.urlparse`` result"
-    return self.parse()
-  
-  @staticmethod
-  def fromDevice(device_name):
-    "Initialize for a device name"
-    return Endpoint(f"serial:/{device_name}")
-  
-  @staticmethod
-  def fromJSONL(addr, port=None):
-    "Initialize for a TCP addr/port address tuple"
-    return Endpoint(f"tcp://{addr}" + (f":{port}" if port else ""))
-  
-  def __repr__(self):  # doesnt work...
-      return f"Endpoint(\"{self.endpoint}\")"
+    >>> Endpoint("serial:/dev/ttyACM0") # device file at Linux/Mac
+    Endpoint("serial:/dev/ttyACM0")
+    >>> Endpoint.fromDevice("/dev/ttyACM0")
+    Endpoint("serial:/dev/ttyACM0")
+    >>> Endpoint("serial:/COM0")
+    Endpoint("serial:/COM0")
+    >>> Endpoint.fromDevice("COM0") # port name at Windows
+    Endpoint("serial:/COM0")
+
+    Endpoints with scheme only are fine and used in the code. Note that
+    schemes are the only part of the URL which is always canonically
+    lowercased:
+
+    >>> Endpoint("EMU:")
+    Endpoint("emu:")
+    """
+    default_tcp_port = 5732
+    
+    def __init__(self, endpoint):
+        if not isinstance(endpoint, str):
+            endpoint = str(endpoint)
+            
+        result = urllib.parse.urlparse(endpoint)
+        #result = re.match("(?P<scheme>[a-zA-Z0-9]+):(?P<sep>/?/?)(?P<userpass>[^@:]+(:[^@]+)?)...
+
+        #: Scheme, such as "serial", "tcp", etc.
+        self.scheme = result.scheme
+        self.user = result.username # None is valid
+        self.password = result.password # None is valid
+        self.host = (result.hostname or "") + (result.path or "")
+        self.port = int(result.port or self.default_tcp_port)
+        self.args = urllib.parse.parse_qs(result.query)
+
+        # fixes for serial scheme, mainly neccessary because
+        # result.hostname is lowercased, which is bad for "ttyACM0" or "COM0".
+        # Will also fix problems such as serial://dev/foo resulting in host= "dev/foo"
+        posix = re.match("serial:/?(/.+)", endpoint, re.IGNORECASE)
+        win = re.match("serial:/?/(.+)", endpoint, re.IGNORECASE)
+        if posix:
+            self.host = posix.group(1)
+        elif win:
+            self.host = win.group(1)
+
+        #if self.scheme == "serial" and "/" in self.host and self.host[0] != "/":
+            # fix Unix absolute filenames: serial://dev/foo would result in host = "dev/foo"
+            # however serial:/dev/foo gets correct "/dev/foo". This corrects the double slash version.
+        #    self.host = "/" + self.host
+        
+        if not self.scheme:
+            raise ValueError(f"Invalid Endpoint '{endpoint}' is not a string-encoded URL.")
+
+    @staticmethod
+    def fromDevice(device_name):
+        "Initialize for a device name"
+        sep_host = "//"+device_name if device_name[0] != "/" else device_name
+        return Endpoint(f"serial:{sep_host}")
+    
+    @staticmethod
+    def fromJSONL(addr, port=None):
+        "Initialize for a TCP addr/port address tuple"
+        return Endpoint(f"tcp://{addr}" + (f":{port}" if port else ""))
+    
+    def __repr__(self):
+        s = 'Endpoint("'
+        s += self.scheme + ":"
+        if self.host and self.host[0] != "/":
+            s += "//"
+        if self.user and not self.password:
+            s += self.user + ":" + self.password + "@"
+        elif self.user:
+            s += self.user + ":"
+        s += self.host
+        # the way attaching the port to the host won't work for websockets
+        # (think of Endpoint("http://foo.bar:80/bla.ws")) but we don't support them anyway.
+        if self.port != self.default_tcp_port:
+            s += ":" + str(self.port)
+        if self.args:
+            s += "?" + "&".join([f"{k}={v}" for k,v in self.args.items()])
+        s += '")'
+        return s
+    
+    def __str__(self):
+        return self.__repr__()
 
 def can_resolve(hostname, target_ip:str=None) -> Optional[str]:
     "gethostbyname but without the exceptions, i.e. with a boolean representation of the return value"

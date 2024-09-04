@@ -20,4 +20,7 @@ unittests: # integration/acceptance tests
 test:
 	$(MAKE) doctest unittests
 	
-.PHONY: dist docs test doctest unittests
+help:
+	cat Makefile
+	
+.PHONY: dist docs test doctest unittests help

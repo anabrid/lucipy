@@ -1,4 +1,4 @@
-from lucipy import Circuit, Simulation
+from lucipy import Circuit, Simulation, LUCIDAC
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -27,22 +27,17 @@ e.connect(sci1, scm0.b)
 e.connect(sci0, x, weight = 0.6)        # Compute the parameterized Euler
 e.connect(sci1, y, weight = 0.6)        # spiral.
 
-sim     = Simulation(e)                 # Create simulation object
-t_final = 20                            # This yields a ramp from -1 to +1
+e.probe(x, front_port=5)
+e.probe(y, front_port=6)
 
-#  The integration scheme used has a significant impact on the correctness of 
-# the solution as does the interval between time steps.
-result  = sim.solve_ivp(t_final, 
-                        method = 'LSODA', 
-                        t_eval = np.linspace(0, t_final, num = 1000000))
+print(e)
 
-# Get data from x- and y-integrator
-x_out, y_out = result.y[x.id], result.y[y.id]
+hc = LUCIDAC()
 
-#plt.plot(y_out, x_out)     # Create a phase space plot.
+hc.set_circuit( e.generate() )
 
-plt.plot(result.t, x_out)
-plt.plot(result.t, y_out)
-
-plt.show()                              # Display the plot.
+hc.manual_mode("ic")
+from time import sleep
+sleep(0.2)
+hc.manual_mode("op")
 

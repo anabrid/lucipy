@@ -241,7 +241,7 @@ def measure_cblock_stride(hc, lanes, test_values):
         c0, c1 = k.const(0), k.const(1)
     else: # constant from IC values from an integrator
         # ic=-1: negate the constant because int output is negated
-        c0 = k.int(ic=-1)
+        c0 = k.int(ic=-0.1)
         c1 = c0
         # You have to manually ensure that you called
         # hc.manual_mode("ic") before using this branch!

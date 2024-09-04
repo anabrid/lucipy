@@ -725,7 +725,7 @@ class Routing:
         >>> b.connect(i, m.a)
         Route(uin=0, lane=0, coeff=1, iout=8)
         >>> warnigns_as_list = b.sanity_check()
-        Sanity check warning: Multiplier 0 has input but output is not used.
+        Sanity check warning: Multiplier 0 (counting from 0) has input but output is not used (clane=8 does not go to some route.uin).
         Sanity check warning: Warning: Multiplier 0 is in use but connection B is empty
 
         There are a number of mis-uses which this checker cannot detect, by design. This
@@ -772,7 +772,7 @@ class Routing:
         for i,(used, m) in enumerate(zip(multipliers_used, multipliers)):
             if used:
                 if not has_connection(lambda route: route.uin == m.out):
-                    warnings.append(f"Multiplier {i} has input but output is not used.")
+                    warnings.append(f"Multiplier {i} (counting from 0) has input but output is not used (clane={m.out} does not go to some route.uin).")
                 if not has_connection(lambda route: route.iout == m.a):
                     warnings.append(f"Warning: Multiplier {i} is in use but connection A is empty")
                 if not has_connection(lambda route: route.iout == m.b):

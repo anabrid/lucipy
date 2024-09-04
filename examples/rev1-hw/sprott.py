@@ -30,14 +30,14 @@ if True:
     const   = sprott.const()
     
     # FFM
-    #sprott.probe(mx, front_port=5)
-    #sprott.probe(my, front_port=6)
-    #sprott.probe(mz, front_port=7)
+    sprott.probe(mx, front_port=5)
+    sprott.probe(my, front_port=6)
+    sprott.probe(mz, front_port=7)
     
     # ULM:
-    sprott.probe(mx, front_port=0)
-    sprott.probe(my, front_port=1)
-    sprott.probe(mz, front_port=2)
+    #sprott.probe(mx, front_port=0)
+    #sprott.probe(my, front_port=1)
+    #sprott.probe(mz, front_port=2)
 
     sprott.connect(yz, mx, weight = 10*scale)         # x' = yz
 
@@ -91,8 +91,8 @@ print(config)
 
 hc.set_circuit(
     config,
-    calibrate_offset = True,
-    calibrate_routes = True,
+#    calibrate_offset = True,
+#    calibrate_routes = True,
 #    calibrate_mblock = True,
 )
 
