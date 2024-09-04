@@ -1,6 +1,10 @@
 # This requirements file is *ONLY* for sphinx in order to be able
 # to reproducably build the docs.
 
+# Note that we only have minimal requirements on the sphinx. We just
+# assume you have a working installation, that's it.
+# The contents of this file mostly affects various CI environments.
+
 # the version constraint is probably only relevant for github CI
 sphinx>=7.3.7
 
@@ -13,4 +17,4 @@ scipy
 #sphinxcontrib-svg2pdfconverter
 
 # the following is most likely only relevant for github CI
-markupsafe>=2.1.5
+markupsafe==2.0.1
