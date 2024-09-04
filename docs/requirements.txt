@@ -6,3 +6,6 @@ nbsphinx
 scipy
 #ipython
 #sphinxcontrib-svg2pdfconverter
+
+# the following is only for github CI
+markupsafe>=2.1.5
