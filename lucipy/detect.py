@@ -162,14 +162,14 @@ class ZeroconfDetector:
     def __init__(self, timeout_ms=500):
         # self.search_for = "lucidac-AA-BB-CC" # something which results in an abortion condition!
         if not Zeroconf:
-            raise ImportError("Require Zeroconf python package in order to work")
+            raise ModuleNotFoundError("Constructing a ZeroconfDetector object requires zeroconf, install with 'pip install zeroconf'")
         self.aiobrowser: Optional[AsyncServiceBrowser] = None
         self.aiozc: Optional[AsyncZeroconf] = None
         self.results: List[Endpoint] = []
         self.timeout_ns = timeout_ms*1000
         
     def on_service_state_change(self, zeroconf, service_type: str, name: str, state_change) -> None:
-        #types are actually
+        # types are actually
         # zeroconf: Zeroconf, service_type: str, name: str, state_change: ServiceStateChange
         # but not using them for avoiding dependencies.
         vv(f"Service {name} of type {service_type} state changed: {state_change}")
@@ -260,14 +260,15 @@ def detect_network_teensys(zeroconf_timeout=500) -> List[Endpoint]:
 
 def detect(single=False, prefer_network=True, zeroconf_timeout=500):# -> Optional[Endpoint | List[Endpoint]]:
     """
-    Yields or returns possible endpoints.
+    Yields or returns possible endpoints using all methods. This function will raise an ModuleNotFoundError
+    if a library is not available which might have found more.
 
-    :param single: Return only one found instance or None, if nothing found. If this
-         option is False, this function will return an iterator, i.e. behave as generator.
+    :param single: Return only first found instance or None, if nothing found. If this
+         option is False, this function will return an array of endpoints discovered using all methods.
     :param zeroconf_timeout: Maximum search time: How long to wait for zeroconf answers,
          in milliseconds. Set to 0 or None for unlimited search.
-    :param prefer_network: Yield network result first. Typically a TCP/IP connection is
-         faster and more reliable then the USBSerial.
+    :param prefer_network: Return network result first. Typically a TCP/IP connection is
+         faster and more reliable then the USBSerial connection.
     """
     res = []
     singlize = lambda res: (res[0] if len(res) else None) if single else res

@@ -10,6 +10,9 @@ test.py
 *.npz
 *.npy
 
+# docs build artefacts
+docs/examples
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
