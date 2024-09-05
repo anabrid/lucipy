@@ -96,13 +96,6 @@ def lane_sinus(lane0, lane1):
 
     hc.set_config(config)
 
-    # set all ACL channels to external
-    hc.query("set_circuit", {"entity": [hc.get_mac() ], "config": {
-        "acl_select": [ "internal" ]*8,
-        "adc_channels": [ i0, i1 ],    
-    }})
-
-
     manual_control = True
 
     if manual_control:

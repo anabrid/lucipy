@@ -53,7 +53,7 @@ if optime_sec == 0:
 res = sim.solve_ivp(optime_sec)
 
 import numpy as np
-used_integrator = np.all(res.y != 0, axis=1)
+used_integrator = np.any(res.y != 0, axis=1)
 
 if args.plot:
     import matplotlib.pyplot as plt

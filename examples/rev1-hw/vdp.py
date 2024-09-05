@@ -34,8 +34,6 @@ vdp.probe(y,   front_port=6)
 
 vdp.measure(mdy)
 vdp.measure(y)
-vdp.measure(fb)
-vdp.measure(y2)
 
 print(vdp)
 
@@ -56,6 +54,12 @@ hc.reset_circuit()
 
 config = vdp.generate()
 
+#config["/0"]["/M1"]["calibration"] = {
+#    "offset_x": [0, 0, 0],
+#    "offset_y": [0, 0, 0],
+#    "offset_z": [0, 0, 0]
+#}
+
 import json
 
 print(json.dumps(config))
@@ -63,7 +67,12 @@ print(json.dumps(config))
 # ALL values upscaled
 #config["/0"]["/I"]["upscaling"] = [True]*32
 
-hc.set_circuit( config )
+hc.one_shot_daq() # this initializes the daq
+
+hc.set_circuit( config,
+    calibrate_mblock = True,
+    calibrate_routes= True # do not use this
+)
 
 static_analysis = False
 
@@ -75,7 +84,7 @@ if static_analysis:
     
     
 else:
-    manual_control = False
+    manual_control = True
 
     if manual_control:
         hc.manual_mode("ic")
@@ -85,6 +94,7 @@ else:
     else:
         #hc.run_config.repetitive = True
         hc.run_config.streaming = False
+        hc.run_config.no_streaming = True
         #hc.run_config.write_run_state_changes = False
         
         hc.run_config.ic_time_us = 200
@@ -95,7 +105,7 @@ else:
         
         from pylab import *
         
-        ion()
+        #ion()
 
         run = hc.start_run()
         data = array(run.data())
@@ -108,3 +118,4 @@ else:
         plt.axhline(0, color="white")
         plt.xlabel("Arbitrary units")
         plt.legend()
+        plt.show()
