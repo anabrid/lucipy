@@ -9,7 +9,7 @@ const = circuit.const()
 
 # 0*0: Empty inputs
 circuit.connect(const, m0.a, weight=1)
-circuit.connect(const, m0.b, weight=1)
+circuit.connect(const, m0.b, weight=-1)
 
 # 0*1
 circuit.connect(const, m1.a, weight=0)
@@ -31,11 +31,14 @@ circuit.probe(m3, front_port=7)
 hc = LUCIDAC()
 hc.reset_circuit()
 
+hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+
 config = circuit.generate()
 
 config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [0.1, 0, 0, 0],
-    "offset_y": [0.1, 0, 0, 0],
+    "offset_x": [0.0, 0, 0, 0],
+    "offset_y": [0.0, 0, 0, 0],
     "offset_z": [-0.035, -0.027, -0.029, -0.030]
 }
 hc.set_config(config)

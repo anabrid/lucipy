@@ -17,14 +17,6 @@ mz    = r.int()
 prod  = r.mul()
 const = r.const(1)
 
-# TODO: Cannot use r.const(0) on the following list of usable
-#       lanes because Routing.next_free_lane does not properly
-#       hand over the list of available lanes but works on
-#       naive indices, without the mapping.
-#
-#r.lanes_constraint = [ 1, 2, 3, 5, 6, 10, 11, 12, 14 ]
-#r.lanes_constraint.append(17) # for the constant
-
 r.connect(my,    x, weight = -0.8)
 r.connect(mz,    x, weight = -2.3)
 
@@ -47,7 +39,11 @@ r.probe(my, front_port=7)
 
 hc = LUCIDAC()
 
+
 hc.reset_circuit()
+hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+
 
 # filter out M1 because there is nothing to set
 # and MCU complains if I try to configure something nonexisting

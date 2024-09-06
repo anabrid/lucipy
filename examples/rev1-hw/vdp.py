@@ -50,15 +50,18 @@ for route in vdp.routes:
 
 hc = LUCIDAC()
 hc.sock.sock.debug_print = True
-hc.reset_circuit()
+hc.reset_circuit(dict(keep_calibration=False))
+
+hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 config = vdp.generate()
 
-#config["/0"]["/M1"]["calibration"] = {
-#    "offset_x": [0, 0, 0],
-#    "offset_y": [0, 0, 0],
-#    "offset_z": [0, 0, 0]
-#}
+config["/0"]["/M1"]["calibration"] = {
+    "offset_x": [0, 0, 0, 0],
+    "offset_y": [0, 0, 0, 0],
+    "offset_z": [-0.035, -0.027, -0.029, -0.030]
+}
 
 import json
 
@@ -70,9 +73,12 @@ print(json.dumps(config))
 hc.one_shot_daq() # this initializes the daq
 
 hc.set_circuit( config,
-    calibrate_mblock = True,
-    calibrate_routes= True # do not use this
+#    calibrate_mblock = True,
+#    calibrate_routes= True # do not use this
 )
+
+
+
 
 static_analysis = False
 
