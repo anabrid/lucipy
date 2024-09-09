@@ -22,7 +22,7 @@ l.connect(mx, xy.a)
 l.connect(my, xy.b)
 
 l.connect(xy, mz, weight = 1.5)
-l.connect(mz, mz, weight = 0.2667)
+l.connect(mz, mz, weight = 0.15) #0.2667)
 
 l.connect(mx,    mxs.a)
 l.connect(mz,    mxs.b, weight = -2.68)

@@ -28,19 +28,18 @@ test.probe(m, front_port=7)
 
 hc = LUCIDAC()
 
-hc.reset_circuit()
+hc.reset_circuit(dict(keep_calibration=False))
 
-
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 config = test.generate()
 
-config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [0.1, 0.05, 0.05, 0.04],
-    "offset_y": [0.05, 0, 0, 0],
-    "offset_z": [-0.035, -0.027, -0.029, -0.030]
-}
+#config["/0"]["/M1"]["calibration"] = {
+#    "offset_x": [0.1, 0.05, 0.05, 0.04],
+#    "offset_y": [0.05, 0, 0, 0],
+#    "offset_z": [-0.035, -0.027, -0.029, -0.030]
+#}
 
 print(config)
 
@@ -69,7 +68,7 @@ else:
     #hc.run_config.ic_time = 0 # additional ns
 
     # always:
-    hc.run_config.repetitive = False
+    hc.run_config.repetitive = True
     hc.run_config.streaming = False
     hc.run_config.write_run_state_changes = False
     

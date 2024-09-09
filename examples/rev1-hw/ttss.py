@@ -62,8 +62,8 @@ print(ttss)
 hc = LUCIDAC()
 
 hc.reset_circuit()
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 conf = ttss.generate()
 

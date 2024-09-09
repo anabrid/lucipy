@@ -8,8 +8,8 @@ m0, m1, m2, m3 = circuit.muls(4)
 const = circuit.const()
 
 # 0*0: Empty inputs
-circuit.connect(const, m0.a, weight=1)
-circuit.connect(const, m0.b, weight=-1)
+circuit.connect(const, m0.a, weight=0)
+circuit.connect(const, m0.b, weight=0)
 
 # 0*1
 circuit.connect(const, m1.a, weight=0)
@@ -31,8 +31,8 @@ circuit.probe(m3, front_port=7)
 hc = LUCIDAC()
 hc.reset_circuit()
 
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 config = circuit.generate()
 

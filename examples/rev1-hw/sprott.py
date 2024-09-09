@@ -83,9 +83,19 @@ sprott.measure(mz)
 
 hc = LUCIDAC()
 
-hc.reset_circuit()
+hc.reset_circuit(dict(keep_calibration=False))
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+
 
 config = sprott.generate()
+
+#config["/0"]["/M1"]["calibration"] = {
+#    "offset_x": [0.0, 0, 0, 0],
+    #"offset_y": [0.0, 0, 0, 0],
+    #"offset_z": [-0.035, -0.027, -0.029, -0.030]
+#}
+
 
 print(config)
 
