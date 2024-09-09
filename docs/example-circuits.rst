@@ -73,16 +73,16 @@ the lucipy repository.
    2016, pp. 133 f.
    (Software simulation)
 
-:download:`The van der Pol oscillator `<../examples/simulated/vdp.py>`
+:download:`The van der Pol oscillator <../examples/simulated/vdp.py>`
     The van der Pol oscillator. (Software simulation)
 
-:download:`Mathieu equation `<../examples/simulated/mathieu.py>`
+:download:`Mathieu equation <../examples/simulated/mathieu.py>`
     The Mathieu equation. (Software simulation)
 
-:download:`A Lotka-Volterra system `<../examples/simulated/lotka_volterra.py>`
+:download:`A Lotka-Volterra system <../examples/simulated/lotka-volterra.py>`
     A Lotka-Volterra system. (Software simulation)
 
-:download:`A hyperjerk system `<../examples/simulated/hyperjerk.py>`
+:download:`A hyperjerk system <../examples/simulated/hyperjerk_4.py>`
     A hyperjerk system (with five integrators). (Software simulation)
 
 :download:`A hyperchaotic system including a quartic term <../examples/simulated/hyperchaos.py>`
