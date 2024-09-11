@@ -14,7 +14,7 @@ r = Circuit()                           # Create a circuit
 x     = r.int(ic = .066)
 my    = r.int()
 mz    = r.int()
-prod  = r.mul()
+prod  = r.mul(id=1)
 const = r.const(1)
 
 r.connect(my,    x, weight = -0.8)

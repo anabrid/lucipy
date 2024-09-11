@@ -10,7 +10,7 @@ sin = 24 # external input, ACL_IN[0]
 # note that the ACL_in weights have no meaning
 # since the ACL_IN comes after the c-block
 
-#circuit.route(m, sin, 1.0, m.a)
+circuit.route(m, sin, 1.0, m.b)
 #circuit.connect(sin, m.b, weight=1)
 
 #circuit.connect(circuit.const(), m.b)
