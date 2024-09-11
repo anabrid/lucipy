@@ -10,30 +10,33 @@ from lucipy import Circuit, Simulation
 import matplotlib.pyplot as plt
 import numpy as np
 
+a = 1.0
+b = 2.8
+c = 2.666 / 10
+
 l = Circuit()                           # Create a circuit
 
-mx    = l.int(ic = 1)
-my    = l.int()
-mz    = l.int()
-xy    = l.mul()
-mxs   = l.mul()
-const = l.const()
+mx = l.int(ic = 0.1)
+my = l.int()
+mz = l.int()
+xz = l.mul()
+xy = l.mul()
 
-l.connect(mx, mx)
-l.connect(my, mx, weight = -1.8)
+l.connect(mx, xz.a)                     # Product -x * -z = xz
+l.connect(mz, xz.b)
 
-l.connect(mx, xy.a)
+l.connect(mx, xy.a)                     # Product -x * -y = xy
 l.connect(my, xy.b)
 
-l.connect(xy, mz, weight = 1.5)
-l.connect(mz, mz, weight = 0.2667)
+l.connect(my, mx, weight = -a)
+l.connect(mx, mx, weight = a)
 
-l.connect(mx,    mxs.a)
-l.connect(mz,    mxs.b, weight = -2.68)
-l.connect(const, mxs.b, weight = -1)
+l.connect(mx, my, weight = -b)
+l.connect(xz, my, weight = -5)
+l.connect(my, my, weight = 0.1)
 
-l.connect(mxs, my, weight = 1.536)
-l.connect(my,  my, weight = 0.1)
+l.connect(xy, mz, weight = 5)
+l.connect(mz, mz, weight = c)
 
 sim     = Simulation(l)                 # Create simulation object
 t_final = 1000
