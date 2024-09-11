@@ -1,60 +1,76 @@
-# Implement Lorentz attractor as in 
-# https://analogparadigm.com/downloads/alpaca_2.pdf
+#
+# Mathieu's differential equation
+#
 
-from lucipy import LUCIDAC, Circuit, Route, Connection
+from lucipy import Circuit, Simulation
+import matplotlib.pyplot as plt
+import numpy as np
 
-lucidac_endpoint = "tcp://192.168.150.127"
+# These are the two parameters of Mathieu's equation which have to 
+# be varied to get a stability map. 0 <= a <= 8 and 0 <= q <= 5.
+a = 3
+q = 1
 
-# useful values are a \in [0,1]
-start_a = 4
+# First we need an amplitude stabilised cosine signal. Since we do not have
+# limiters at the moment, we use a van der Pol-oscillator for that purpose.
+eta = .1                # A small value ensures good spectral cleanliness
 
-circuit = Circuit()
+m = Circuit()
 
-x,y,dx,dy = circuit.ints(4)
-circuit.set_ic(y, -0.1)
+mdy = m.int()
+y   = m.int(ic = -1)
+y2  = m.mul()
+fb  = m.mul()
+c   = m.const()
 
-m = circuit.mul()
-c = circuit.const()
+m.connect(fb, mdy, weight = -eta * 2)   # We need cos(2t), so all inputs 
+m.connect(y,  mdy, weight = -0.5 * 2)   # to the integrators get a factor 2.
 
-circuit.connect(c, dx, weight=+2)
-circuit.connect(x, dx, weight=+4)
-circuit.connect(dx, x, weight=-1)
-circuit.connect(x,  x, weight=-0.005) # damping for manual amplitude stabilization
+m.connect(mdy, y, weight = 2 * 2)
 
-param_route = circuit.connect(y, m.a, weight=-start_a/10)
-do_couple = True
-if do_couple:
-    circuit.connect(x, m.b, weight=-1)
-else:
-    circuit.connect(c, m.b, weight=+1)
+m.connect(y, y2.a)
+m.connect(y, y2.b)
 
-circuit.connect(m, dy, weight=-1)
-circuit.connect(dy, y, weight=-2)
+m.connect(y2,  fb.a, weight = -1)
+m.connect(c,   fb.a, weight = 0.25)
+m.connect(mdy, fb.b)
 
-# dummy connections for external readout (ACL_OUT),
-# will change in REV1 hardware 
-circuit.add(Route(x.out, 8, 0, 6))
-circuit.add(Route(y.out, 9, 0, 6))
+# Now for the actual Mathieu equation:
+mdym = m.int()
+ym   = m.int(ic = 0.1)
+p    = m.mul()
 
-print("Circuit routes for Mathieu's equation: ")
-print(circuit)
+m.connect(ym, mdym, weight = -a)
+m.connect(p,  mdym, weight = q)
 
-hc = LUCIDAC(lucidac_endpoint)
-hc.query("reset")
-hc.set_config(circuit.generate())
-hc.set_op_time(ms=1000)
-hc.run_config.halt_on_overload = False
+m.connect(mdym, ym)
 
-hc.start_run()
+m.connect(y, p.a)
+m.connect(ym, p.b, weight = 2)
 
-# to sweep throught the parameter space, it is enough to change
-# the relevant potentiometer instead of reprogramming the whole circuit:
-sweep_coeff = param_route.lane
-#hc.set_by_path(["/C", "elements", str(sweep_coeff), "factor"], -2.0/10)
+################################################################################
+# Run simulation
+sim     = Simulation(m)                  # Create simulation object
+t_final = 40
 
-def run_with(a):
-    hc.slurp()
-    hc.set_config({ "C": { "elements": { str(sweep_coeff): -a/10 } }})
-    hc.slurp()
-    hc.start_run()
-    hc.slurp()
+#  The integration scheme used has a significant impact on the correctness of 
+# the solution as does the interval between time steps.
+result  = sim.solve_ivp(t_final, 
+                        method = 'LSODA', 
+                       # t_eval = np.linspace(0, t_final, num = 1000000))
+                       )
+
+# Get data from x- and y-integrator
+mdy_out, y_out = result.y[mdy.id], result.y[y.id]
+ym_out = result.y[ym.id]
+
+dso_colors = ["#fffe05", "#02faff", "#f807fb", "#007bff" ] # Rigol DHO14 ;)
+plt.style.use("dark_background")
+plt.title("LUCIDAC Simulation: Matthieu's differential equation")
+#plt.plot(result.t, y_out, label="y_out", color=dso_colors[0])
+plt.plot(result.t, ym_out, label="ym", color=dso_colors[1])
+plt.axhline(0, color="white")
+plt.xlabel("Simulation time [100us]")
+plt.legend()
+plt.show()                                  # Display the plot.
+
