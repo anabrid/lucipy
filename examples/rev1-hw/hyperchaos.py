@@ -28,7 +28,7 @@ hc.connect(mw, z, weight = 0.2)
 hc.connect(z, my, weight = 0.1666)
 
 hc.connect(my, x, weight = 0.15)
-hc.connect(x,  x, weight = 0.002)
+hc.connect(x,  x, weight = 0.007)
 
 hc.connect(x, x2.a, weight = 2)
 hc.connect(x, x2.b, weight = 2)
