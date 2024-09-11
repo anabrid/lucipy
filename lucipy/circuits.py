@@ -67,7 +67,7 @@ Int = namedtuple("Int", ["id", "out", "a"])          #: Integrator, integrates i
 Mul = namedtuple("Mul", ["id", "out", "a", "b"])     #: Multiplier, multiplies inputs "a" with "b", output to "out"
 Id  = namedtuple("Id",  ["id", "out", "a"])          #: Identity element, just passes input "a" to output "out"
 Const = namedtuple("Const", ["id", "out" ])          #: Constant giver. output on (cross lane "out")
-Out = namedtuple("Out", ["id", "lane"])              #: Front panel output (ACL_OUT) on lane "lane"
+Front = namedtuple("Out", ["id", "lane"])            #: Front panel input/output (ACL_IN/ACL_OUT) on lane "lane"
 Ele = Union[Int,Mul,Const,Id,Out]                    #: type of any kind of element defined so far
 isEle = lambda thing: isinstance(thing, get_args(Ele))
 
@@ -99,7 +99,7 @@ class DefaultLUCIDAC:
             Int:   [default_value]*DefaultLUCIDAC.num_int,
             Mul:   [default_value]*DefaultLUCIDAC.num_mul,
             Const: [default_value]*DefaultLUCIDAC.num_const,
-            Out:   [default_value]*DefaultLUCIDAC.num_acls,
+            Front: [default_value]*DefaultLUCIDAC.num_acls,
             Id:    [default_value]*DefaultLUCIDAC.num_id,
         }
     
@@ -128,8 +128,9 @@ class DefaultLUCIDAC:
             # const(idx=0) => taken from clane 14 => has to be used in lanes  0..15
             # conts(idx=1) => taken from clane 15 => has to be used in lanes 16..31
             return Const(idx, 14 + idx)
-        if t == Out:
-            return Out(idx, cls.acl_offset + idx)
+        if t == Front:
+            return Front(idx, cls.acl_offset + idx)
+        raise ValueError(f"Illegal value for {t=}. Need a type like Int/Mul/Id/Const/Front from lucipy.circuits")
         
     @staticmethod
     def populated():
@@ -206,9 +207,9 @@ class Reservoir:
         return self.alloc(Mul, id)
     
     def const(self, id=None):
-        # use_constant is a method of the Routing and Circuit classes
+        "Allocates a constant. Also turns on the constant giver scheme in general."
         if hasattr(self, "use_constant"):
-            self.use_constant()
+            self.use_constant() # use_constant is a method of the Routing and Circuit classes
         return self.alloc(Const, id)
     
     def identity(self, id=None):
@@ -228,10 +229,12 @@ class Reservoir:
         "Allocate count many identifiers"
         return [self.identity() for x in range(count)]
     
-    def front_output(self, id=None):
-        "Allocates an ACL_OUT Front panel output"
-        return self.alloc(Out, id)
-
+    def front_panel(self, id=None):
+        "Allocates an ACL_IN/ACL_OUT Front panel input/output"
+        # Do not do the following as we don't know if the output or input is requested!
+        #if hasattr(self, "set_front_panel"):
+        #    self.set_front_panel(id, as_input=True) # method in Routing and Circuit classes
+        return self.alloc(Front, id)
 
 class Route:
     """
@@ -277,7 +280,10 @@ class Route:
 
     def resolve(self):
         if isEle(self.uin):
-            self.uin = self.uin.out
+            if isinstance(self.uin, In):
+                self.uin = self.do_not_connect
+            else:
+                self.uin = self.uin.out
 
         if isEle(self.iout):
             if hasattr(self.iout, "b"):
@@ -292,7 +298,7 @@ class Route:
         errors = []
         if None in self:
             errors.append(f"Route contains None values.")
-        if not self.uin in range(0,16):
+        if not self.uin in range(0,16) and self.uin != self.do_not_connect:
             errors.append(f"Uin out of range in {self}")
         if not self.lane in range(0,32):
             errors.append(f"Lane out of range in {self}")
@@ -357,6 +363,7 @@ class MIntBlock:
         self.set_k0(el, self.slow if val else self.fast)
         
     def generate(self):
+        "Returns configuration for the MIntBlock"
         return {
             "elements": [dict(k=k, ic=ic) for k,ic in zip(self.k0s, self.ics)]
         }
@@ -390,11 +397,64 @@ class MIntBlock:
         ret += [f"set-element-config carrier/0/M0/{i} k {val}" for i,val in enumerate(self.ics) if self.k0s != self.fast]
         return "\n".join(ret)
 
+class Probes:
+    """
+    Models the LUCIDAC Carrier ADC channels and Front Panel inputs (ACL_select).
+    """
+    
+    def __init__(self, acl_select=None, adc_channels=None, **kwargs):
+        super().__init__(**kwargs)  # forwards all unused arguments
+        self.acl_select = acl_select if acl_select else ["internal"] * 8
+        self.adc_channels = adc_channels if adc_channels else [None]*8
+        
+    def set_acl_select(self, acl_select):
+        "Overwrite the internal/external selection. Do not use -- Use :meth:`Routing.front_input` instead."
+        self.acl_select = acl_select
+        
+    def set_adc_channels(self, adc_channels):
+        "Overwrite the ADC Channel requests. Do not use -- Use :meth:`Routing.probe` instead."
+        self.adc_channels = adc_channels
+
+    def measure(self, source:Union[Ele,int], adc_channel=None):
+        """
+        Syntactic sugar to set an adc_channel.
+        """
+        if adc_channel == None:
+            # TODO is untested
+            adc_channel = next_free(map(notNone, self.adc_channels))
+        if not adc_channel in range(0,8):
+            raise ValueError(f"{adc_channel=} illegal, expecting in 0..7")
+        # first have to look for element in routing
+        uin = source.out if isEle(source) else source
+        self.adc_channels[adc_channel] = uin
+        return adc_channel
+        
+    def generate(self):
+        "Returns carrier configuration, not cluster configuration"
+        ret = {}
+        if self.acl_select:
+            #if not all(isinstance(v, bool) for v in self.acl_select):
+            #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
+            ret["acl_select"] = self.acl_select
+        if len(list(filter(notNone, self.adc_channels))):
+            # TODO: Probably check again with the Nones.
+            if not all(isinstance(v, int) or v == None for v in self.adc_channels):
+                raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
+            ret["adc_channels"] = self.adc_channels
+        return ret
+    
+    def load(self, config):
+        if "acl_select" in config:
+            self.acl_select = config["acl_select"]
+        if "adc_channels" in config:
+            self.adc_channels = config["adc_channels"]
+        return self
+
 #: Just a tuple collecting U, C, I matrices without determining their actual representation.
 #: The representation could be lists, numpy arrays, etc. depending on the use.
 UCI = namedtuple("UCI", ["U", "C", "I"])
 
-class Routing:
+class Routing(Probes):
     """
     This class provides a route-tuple like interface to the UCI block and
     generates the Output-centric matrix configuration at the end. Most likely,
@@ -496,6 +556,48 @@ class Routing:
         """
         self.u_constant = use_constant
     
+    def probe(self, source:Union[Ele,int], front_port=None, weight=1):
+        """
+        Syntactic sugar to route a port to the front panel output.
+        The name indicates that an oscilloscope probe shall be connected
+        to this port.
+        If no port is given, will count up.
+        
+        If you need a weight, use :meth:`connect` directly as in
+        ``circuit.connect(source, circuit.front_output(front_port), weight=1.23)``.
+       
+        :arg front_output: Integer describing the front port number (0..7)
+        :returns: The generated Route (is also added)
+        
+        See also :meth:`Circuit.measure` for putting a singal to ADC/DAQ.
+        
+        Instead of using this function, you can also add the route by yourself:
+        """
+        target = self.front_panel(front_port) # None passes to default alloc None!
+        return self.add(Connection(source, target, weight=weight))
+    
+    def front_input(self, id, use_front=True):
+        """
+        Make use of a front panel input (or use internal lane instead, if `use_front=False`)
+        Note that front panel ports are always outputs and that they come behind the C-block, thus
+        no coefficient can be used.
+        
+        You should not use this function when describing circuits, since it won't give you control
+        over the I-block configuration. Instead, you should route front inputs:
+        
+        >>> c = Circuit()
+        >>> i0 = c.int() # integrator 0
+        >>> fp0 = c.front_panel(0) # front panel input/output 0
+        >>> c.connect(fp0, i0) # connect front panel input to integrator 0
+        """
+        if id in range(DefaultLUCIDAC.acl_offset, DefaultLUCIDAC.acl_offset+DefaultLUCIDAC.num_acls):
+            # also accept wrongly taken ids. Should ensure that there is no overlap between the two
+            # accepted input domains.
+            id -= DefaultLUCIDAC.acl_offset
+        if not id in range(0,8):
+            raise ValueError(f"{id=} must be within the range of front panel port number (0,8)")
+        self.acl_select[id] = "external" if use_front else "internal"
+    
     def next_free_lane(self, constraint=None):
         """
         Allocates and returns the next free lane in the circuit.
@@ -537,8 +639,8 @@ class Routing:
         if isinstance(route_or_list_of_routes, list):
             return list(map(self.add, route_or_list_of_routes))
         
-        route = route_or_list_of_routes
-        uin, lane, coeff, iout = route
+        old_route = route_or_list_of_routes
+        uin, lane, coeff, iout = old_route
        
         if isinstance(uin, Const):
             right_ublock_chip  = lambda potential_lane: 15 < potential_lane
@@ -549,38 +651,81 @@ class Routing:
                 elif uin.out == 15:
                     criterion = left_ublock_chip
                 else:
-                    raise ValueError(f"Unacceptable Constant clane requested in unrouted {route}")
+                    raise ValueError(f"Unacceptable Constant clane requested in unrouted {old_route}")
                 lane = self.next_free_lane(criterion)
             else:
                 if uin.out == 14 and not right_ublock_chip(lane):
-                    raise ValueError(f"No Constant available at {route}, lane must be >15")
+                    raise ValueError(f"No Constant available at {old_route}, lane must be >15")
                 if uin.out == 15 and not left_ublock_chip(lane):
-                    raise ValueError(f"No Constant available at {route}, lane must be <16")
+                    raise ValueError(f"No Constant available at {old_route}, lane must be <16")
         
-        if isinstance(iout, Out):
+        acl_select = None
+        
+        if isinstance(uin, Front):
+            self.front_input(uin.lane) # register input
+            lane = uin.lane
+            uin = Route.do_not_connect
+            acl_select = "input"
+            
+        if isinstance(iout, Front):
             lane = iout.lane
             iout = Route.do_not_connect
+            acl_select = "output"
         
         if lane is None:
             lane = self.next_free_lane()
-        else:
-            if lane in [ r.lane for r in self.routes ]:
-                raise ValueError(f"Cannot append {route} because this lane is already occupied.")
             
-        route = Route(uin, lane, coeff, iout)
-        
+        new_route = Route(uin, lane, coeff, iout)
+    
         # at the end, replace the symbols with numbers.
-        route.resolve()
-        
+        new_route.resolve()
+    
         # out of bounds check
         if self.accept_dirty:
-            for err in route.sanity_list():
+            for err in new_route.sanity_list():
                 print(f"Warning at adding Route: {err}")
         else:
-            route.sanity_raise()
+            new_route.sanity_raise()
+
+        if acl_select:
+            # search whether this lane was already used within the input/output ACL scheme
+            # The idea is generally that within the current route,
+            #    uin  == -1  corresponds to ACL_IN  request
+            #    iout == -1  corresponds to ACL_OUT request
+            # If we find a lane that has iout == -1 and we want ACL_IN, we can use that lane.
+            # If we find a lane that has uin == -1 and we want ACL_OUT, we can use that lane
+            for other in self.routes:
+                if other.lane == lane:
+                    other_acl_select = None
+                    if other.uin == Route.do_not_connect:
+                        other_acl_select = "input"
+                    elif other.iout == Route.do_not_connect:
+                        other_acl_select = "output"
+                    else: # should not happen
+                        raise ValueError(f"While trying to add a route, I found an allocated nonsense route {other}.")
+                
+                    if other_acl_select == acl_select:
+                        raise ValueError(f"Cannot append {new_route} (external {acl_select}) because a similar one exists: {other}")
+                    else: # can combine!
+                        if other.uin == Route.do_not_connect:
+                            other.uin = new_route.uin
+                        elif other.iout == Route.do_not_connect:
+                            other.iout = new_route.iout
+                        else: # should not happen
+                            raise ValueError(f"While trying to add a route, I caught me up in contradictions.")
+                        # skip appending new_route because we merged it successfully into other
+                        return other
+            else: # have not found this ACL condition yet. Ensure this routing request makes sense:
+                if acl_select == "input" and coeff != 1:
+                    raise ValueError(f"Cannot add new ACL_INgoing {new_route} with a coefficient != 1 because it doesn't pass the C-block.")
+                    # However, if user first adds an ACL_OUTgoing route at this lane, the ingoing will be accepted.
+                    # But we have to ensure the weights match. Or the outgoing overwrites!
+        else:
+            if lane in [ r.lane for r in self.routes ]:
+                raise ValueError(f"Cannot append {new_route} because this lane is already occupied.")
         
-        self.routes.append(route)
-        return route
+        self.routes.append(new_route)
+        return new_route
 
     def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
         """
@@ -613,7 +758,7 @@ class Routing:
     
         """
         return UCI(
-            U=clean([[r.uin  for r in self.routes if r.lane == lane] for lane in range(32)]),
+            U=clean([[r.uin  for r in self.routes if r.lane == lane and u.uin != Route.do_not_connect] for lane in range(32)]),
             I=clean([r.iout for r in self.routes if r.lane == lane and r.iout != Route.do_not_connect] for lane in range(32)),
             C=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
@@ -793,6 +938,8 @@ class Routing:
         files as standalone, for instance by passing the output of this function to
         ``json.dumps(circuit.generate())``.
         
+        Generates configuration for the Carrier.
+        
         .. note::
         
            The C-Matrix values here are correctly scaled.
@@ -804,7 +951,7 @@ class Routing:
         U,C,I = self.routes2input()
         upscaling, scaled_c = self.coeff_upscale(C)
         
-        d = {
+        cluster = {
             "/U": dict(outputs = U),
             "/C": dict(elements = scaled_c),
             "/I": dict(outputs = self.input2output(I), upscaling = upscaling)
@@ -812,9 +959,14 @@ class Routing:
         
         # hopefully this also allows to turn OFF the constant by setting it to False...
         if self.u_constant != None:
-            d["/U"]["constant"] = self.u_constant
+            cluster["/U"]["constant"] = self.u_constant
+            
+        carrier = {"/0": cluster}
         
-        return d
+        if not any(k == "external" for k in self.acl_select):
+            carrier["acl_select"] = acl_select
+        
+        return carrier
         
     def load(self, cluster_config):
         """
@@ -833,6 +985,8 @@ class Routing:
         
            Also accepts a carrier-level configuration. Does not accept a configuration message
            including the JSON Envelope right now.
+            
+            Currently does not yet properly reads ACL_IN requests.
         """
         
         if "/0" in cluster_config:
@@ -899,6 +1053,9 @@ class Routing:
         >>> U, C, I = c.to_dense_matrices(sanity_check=False) # skipping for doctesting
         >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix(sanity_check=False))
         True
+        
+        Limitations: This omits all information about ``acl_select`` and the constant
+        giver scheme.
         """
         if sanity_check:
             self.sanity_check()
@@ -958,6 +1115,8 @@ class Routing:
             f(1,2,3) # works
             sol = solve_ivp(f, (0, 10), [1,2,3])
         
+        Limitations: This omits all information about ``acl_select`` and the constant
+        giver scheme.
         """
         self.sanity_check()
         from sympy import symbols, Symbol, Function, Derivative, Eq
@@ -1004,6 +1163,9 @@ class Routing:
         """
         Trivially "reverse engineer" a circuit based on routes. Tries to output valid
         python code as string.
+        
+        Limitations: This omits all information about ``acl_select`` and the constant
+        giver scheme.
         """
         self.sanity_check()
         
@@ -1043,58 +1205,7 @@ class Routing:
                          
         return ",\n".join(map(route2connection, self.routes))
         
-class Probes:
-    """
-    Models the LUCIDAC Carrier ADC channels and Front Panel inputs (ACL_select).
-    """
-    
-    def __init__(self, acl_select=None, adc_channels=None, **kwargs):
-        super().__init__(**kwargs)  # forwards all unused arguments
-        self.acl_select = acl_select if acl_select else []
-        self.adc_channels = adc_channels if adc_channels else [None]*8
-        
-    def set_acl_select(self, acl_select):
-        self.acl_select = acl_select
-        
-    def set_adc_channels(self, adc_channels):
-        self.adc_channels = adc_channels
-
-    def measure(self, source:Union[Ele,int], adc_channel=None):
-        """
-        Syntactic sugar to set an adc_channel.
-        """
-        if adc_channel == None:
-            # TODO is untested
-            adc_channel = next_free(map(notNone, self.adc_channels))
-        if not adc_channel in range(0,8):
-            raise ValueError(f"{adc_channel=} illegal, expecting in 0..7")
-        # first have to look for element in routing
-        uin = source.out if isEle(source) else source
-        self.adc_channels[adc_channel] = uin
-        return adc_channel
-        
-    def generate(self):
-        "Returns carrier configuration, not cluster configuration"
-        ret = {}
-        if self.acl_select:
-            #if not all(isinstance(v, bool) for v in self.acl_select):
-            #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
-            ret["acl_select"] = self.acl_select
-        if len(list(filter(notNone, self.adc_channels))):
-            # TODO: Probably check again with the Nones.
-            if not all(isinstance(v, int) or v == None for v in self.adc_channels):
-                raise ValueError(f"Unsuitable ADC channels, expected list of ints: {self.adc_channels}")
-            ret["adc_channels"] = self.adc_channels
-        return ret
-    
-    def load(self, config):
-        if "acl_select" in config:
-            self.acl_select = config["acl_select"]
-        if "adc_channels" in config:
-            self.adc_channels = config["adc_channels"]
-        return self
-
-class Circuit(Reservoir, MIntBlock, Routing, Probes):
+class Circuit(Reservoir, MIntBlock, Routing):
     """
     The Circuit class collects all reconfigurable properties of a LUCIDAC. The class joins
     all features from it's parents in a *mixin idiom*. (This means that, if you really want to,
@@ -1133,25 +1244,6 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         self.set_ic(el, ic)
         self.set_k0(el, MIntBlock.slow if slow else MIntBlock.fast)
         return el
-    
-    def probe(self, source:Union[Ele,int], front_port=None):
-        """
-        Syntactic sugar to route a port to the front panel output.
-        The name indicates that an oscilloscope probe shall be connected
-        to this port.
-        If no port is given, will count up.
-        
-        If you need a weight, use :meth:`connect` directly as in
-        ``circuit.connect(source, circuit.front_output(front_port), weight=1.23)``.
-       
-        :arg front_output: Integer describing the front port number (0..7)
-        :returns: The generated Route (is also added)
-        
-        See also :meth:`Circuit.measure` for putting a singal to ADC/DAQ.
-        """
-        target = self.alloc(Out, front_port) # None passes to default alloc None!
-        return self.add(Connection(source, target))
-    
     
     def load(self, config_message):
         """
