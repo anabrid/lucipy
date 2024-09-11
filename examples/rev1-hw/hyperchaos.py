@@ -8,15 +8,17 @@ import numpy as np
 
 hc = Circuit()                          # Create a circuit
 
-mw   = hc.int(ic = .01)
-z    = hc.int()
-my   = hc.int()
-x    = hc.int()
-x2   = hc.mul(1)
-x4   = hc.mul(2)
-mwx4 = hc.mul(3)
+fs = False
 
-hc.connect(mwx4, mw, weight = 1.6)
+mw   = hc.int(slow = fs, ic = .01)
+z    = hc.int(slow = fs)
+my   = hc.int(slow = fs)
+x    = hc.int(slow = fs)
+x2   = hc.mul()
+x4   = hc.mul()
+mwx4 = hc.mul()
+
+hc.connect(mwx4, mw, weight = 0.8)
 hc.connect(x,    mw, weight = -0.02)
 hc.connect(my,   mw, weight = 0.03)
 hc.connect(z,    mw, weight = -0.175)
@@ -26,18 +28,20 @@ hc.connect(mw, z, weight = 0.2)
 hc.connect(z, my, weight = 0.1666)
 
 hc.connect(my, x, weight = 0.15)
+hc.connect(x,  x, weight = 0.007)
 
-hc.connect(x, x2.a)
-hc.connect(x, x2.b)
+hc.connect(x, x2.a, weight = 2)
+hc.connect(x, x2.b, weight = 2)
 
 hc.connect(x2, x4.a)
 hc.connect(x2, x4.b)
 
 hc.connect(x4, mwx4.a)
-hc.connect(mw, mwx4.b)
+hc.connect(mw, mwx4.b, weight = 2)
 
-hc.probe(mw, front_port=5)
-hc.probe(x, front_port=6)
+hc.probe(mw, front_port=4)
+hc.probe(x, front_port=5)
+hc.probe(my, front_port=6)
 hc.probe(z, front_port=7)
 
 config = hc.generate()
