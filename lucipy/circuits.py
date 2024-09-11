@@ -68,7 +68,7 @@ Mul = namedtuple("Mul", ["id", "out", "a", "b"])     #: Multiplier, multiplies i
 Id  = namedtuple("Id",  ["id", "out", "a"])          #: Identity element, just passes input "a" to output "out"
 Const = namedtuple("Const", ["id", "out" ])          #: Constant giver. output on (cross lane "out")
 Front = namedtuple("Out", ["id", "lane"])            #: Front panel input/output (ACL_IN/ACL_OUT) on lane "lane"
-Ele = Union[Int,Mul,Const,Id,Out]                    #: type of any kind of element defined so far
+Ele = Union[Int,Mul,Const,Id,Front]                  #: type of any kind of element defined so far
 isEle = lambda thing: isinstance(thing, get_args(Ele))
 
 
@@ -279,10 +279,11 @@ class Route:
         return list(self) == list(other)
 
     def resolve(self):
+        """
+        Resolve elements at uin/iout to numbers. This only works if they have the attributes a/b/out.
+        For more fancy elements, it is subject of the caller to resolve them properly.
+        """
         if isEle(self.uin):
-            if isinstance(self.uin, In):
-                self.uin = self.do_not_connect
-            else:
                 self.uin = self.uin.out
 
         if isEle(self.iout):
@@ -432,10 +433,11 @@ class Probes:
     def generate(self):
         "Returns carrier configuration, not cluster configuration"
         ret = {}
-        if self.acl_select:
+        # TODO: ACL_SELECT is currently handled by the Routing class.
+        #if self.acl_select:
             #if not all(isinstance(v, bool) for v in self.acl_select):
             #    raise ValueError(f"Unsuitable ACL selects, expected list of bools: {self.acl_select}")
-            ret["acl_select"] = self.acl_select
+        #    ret["acl_select"] = self.acl_select
         if len(list(filter(notNone, self.adc_channels))):
             # TODO: Probably check again with the Nones.
             if not all(isinstance(v, int) or v == None for v in self.adc_channels):
@@ -444,8 +446,9 @@ class Probes:
         return ret
     
     def load(self, config):
-        if "acl_select" in config:
-            self.acl_select = config["acl_select"]
+        # TODO: ACL_SELECT is currently handled by the Routing class.
+        #if "acl_select" in config:
+        #    self.acl_select = config["acl_select"]
         if "adc_channels" in config:
             self.adc_channels = config["adc_channels"]
         return self
@@ -589,6 +592,7 @@ class Routing(Probes):
         >>> i0 = c.int() # integrator 0
         >>> fp0 = c.front_panel(0) # front panel input/output 0
         >>> c.connect(fp0, i0) # connect front panel input to integrator 0
+        Route(uin=-1, lane=24, coeff=1, iout=0)
         """
         if id in range(DefaultLUCIDAC.acl_offset, DefaultLUCIDAC.acl_offset+DefaultLUCIDAC.num_acls):
             # also accept wrongly taken ids. Should ensure that there is no overlap between the two
@@ -758,7 +762,7 @@ class Routing(Probes):
     
         """
         return UCI(
-            U=clean([[r.uin  for r in self.routes if r.lane == lane and u.uin != Route.do_not_connect] for lane in range(32)]),
+            U=clean([[r.uin  for r in self.routes if r.lane == lane and r.uin != Route.do_not_connect] for lane in range(32)]),
             I=clean([r.iout for r in self.routes if r.lane == lane and r.iout != Route.do_not_connect] for lane in range(32)),
             C=[route.coeff if route else 0 for route in (find(lambda r, lane=lane: r.lane == lane, None, self.routes) for lane in range(32))]
         )
@@ -962,13 +966,15 @@ class Routing(Probes):
             cluster["/U"]["constant"] = self.u_constant
             
         carrier = {"/0": cluster}
+
+        carrier.update(Probes.generate(self).items())
         
-        if not any(k == "external" for k in self.acl_select):
-            carrier["acl_select"] = acl_select
+        if any(k == "external" for k in self.acl_select):
+            carrier["acl_select"] = self.acl_select
         
         return carrier
         
-    def load(self, cluster_config):
+    def load(self, carrier_config):
         """
         The inverse of generate. Useful for loading an existing circuit. You can load an
         existing standalone JSON configuration file by using this function.
@@ -989,8 +995,11 @@ class Routing(Probes):
             Currently does not yet properly reads ACL_IN requests.
         """
         
-        if "/0" in cluster_config:
-            cluster_config = cluster_config["/0"]
+        # load parental classes
+        Probes.load(self, carrier_config)
+        
+        # also accept slightly illegal input
+        cluster_config = carrier_config["/0"] if "/0" in carrier_config else carrier_config
         
         # load all in output centric format
         U = cluster_config["/U"]["outputs"] if "/U" in cluster_config else [ None ]*32
@@ -1250,12 +1259,11 @@ class Circuit(Reservoir, MIntBlock, Routing):
         Loads the configuration which :meth:`generate` spills out. The full circle.
         """
         config_carrier = config_message["config"] if "config" in config_message else config_message
-        Probes.load(self, config_carrier)
         config_cluster = config_carrier["/0"] if "/0" in config_carrier else config_carrier
         
         if "/M0" in config_cluster:
             MIntBlock.load(self, config_cluster["/M0"])
-        Routing.load(self, config_cluster)
+        Routing.load(self, config_carrier)
 
         return self
     
@@ -1285,19 +1293,15 @@ class Circuit(Reservoir, MIntBlock, Routing):
         >>> "/0" in Circuit().randomize().generate(sanity_check=False)
         True
         
-        :arg skip: An entity (within LUCIDAC) to skip, for instance "/M1"
+        :arg skip: An entity (within LUCIDAC, at Cluster level) to skip, for instance "/M1"
         :arg sanity_check: Whether to carry out a sanity check (results in printouts)
         """
-        cluster_config = Routing.generate(self, sanity_check=sanity_check)
-        cluster_config["/M0"] = MIntBlock.generate(self) 
-        cluster_config["/M1"] = {} # MMulBlock
+        carrier_config = Routing.generate(self, sanity_check=sanity_check)
+        carrier_config["/0"]["/M0"] = MIntBlock.generate(self) 
+        carrier_config["/0"]["/M1"] = {} # MMulBlock
         
         if skip:
-            cluster_config = { k:v for k,v in cluster_config.items() if not skip in k }
-
-        carrier_config = {}
-        carrier_config["/0"] = cluster_config
-        carrier_config.update(Probes.generate(self).items())
+            carrier_config["/0"] = { k:v for k,v in carrier_config["/0"].items() if not skip in k }
 
         return carrier_config
         
