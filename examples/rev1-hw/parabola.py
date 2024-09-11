@@ -5,9 +5,9 @@ from time import sleep
 
 test = Circuit()
 
-t = test.int(ic = +1)
-t2 = test.int(ic = -1)
-m = test.mul(id=3)
+t = test.int(ic = +1, id=2)
+t2 = test.int(ic = -1, id=3)
+m = test.mul(id=0)
 c = test.const(1)
 
 l0, l1 = 0, 1
@@ -35,11 +35,11 @@ hc.reset_circuit(dict(keep_calibration=False))
 
 config = test.generate()
 
-#config["/0"]["/M1"]["calibration"] = {
-#    "offset_x": [0.1, 0.05, 0.05, 0.04],
-#    "offset_y": [0.05, 0, 0, 0],
-#    "offset_z": [-0.035, -0.027, -0.029, -0.030]
-#}
+config["/0"]["/M1"]["calibration"] = {
+        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+        "offset_y": [ 0.0,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+}
 
 print(config)
 
@@ -58,7 +58,7 @@ if manual_control:
     hc.manual_mode("op")
     #sleep(0.5)
 else:
-    hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+    hc.set_run(halt_on_overload=False, ic_time=200_000)
     hc.set_op_time(us=200)
 
     # for k0 slow:
@@ -71,6 +71,7 @@ else:
     hc.run_config.repetitive = True
     hc.run_config.streaming = False
     hc.run_config.write_run_state_changes = False
+    hc.run_config.calibrate = False
     
     #hc.stop_run()
     run = hc.start_run()

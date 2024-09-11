@@ -77,11 +77,13 @@ else:
 
 
 
-sprott.measure(mx)
-sprott.measure(my)
-sprott.measure(mz)
+#sprott.measure(mx)
+#sprott.measure(my)
+#sprott.measure(mz)
 
 hc = LUCIDAC()
+
+print(hc.get_entities())
 
 hc.reset_circuit(dict(keep_calibration=False))
 #hc.set_by_path(["0", "SH"], {"state": "TRACK"})
@@ -90,12 +92,19 @@ hc.reset_circuit(dict(keep_calibration=False))
 
 config = sprott.generate()
 
-#config["/0"]["/M1"]["calibration"] = {
-#    "offset_x": [0.0, 0, 0, 0],
-    #"offset_y": [0.0, 0, 0, 0],
-    #"offset_z": [-0.035, -0.027, -0.029, -0.030]
-#}
+if False:
+    # These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
+    config["/0"]["/M1"]["calibration"] = {
+        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+        "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+    }
 
+config["/0"]["/M1"]["calibration"] = {
+        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+        "offset_y": [ 0.0,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+}
 
 print(config)
 
@@ -103,8 +112,10 @@ hc.set_circuit(
     config,
 #    calibrate_offset = True,
 #    calibrate_routes = True,
-#    calibrate_mblock = True,
+    #calibrate_mblock = False,
 )
+
+print(hc.get_circuit())
 
 manual_control = True
 

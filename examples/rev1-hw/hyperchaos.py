@@ -12,9 +12,9 @@ mw   = hc.int(ic = .01)
 z    = hc.int()
 my   = hc.int()
 x    = hc.int()
-x2   = hc.mul()
-x4   = hc.mul()
-mwx4 = hc.mul()
+x2   = hc.mul(1)
+x4   = hc.mul(2)
+mwx4 = hc.mul(3)
 
 hc.connect(mwx4, mw, weight = 1.6)
 hc.connect(x,    mw, weight = -0.02)
@@ -41,6 +41,13 @@ hc.probe(x, front_port=6)
 hc.probe(z, front_port=7)
 
 config = hc.generate()
+
+# These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
+config["/0"]["/M1"]["calibration"] = {
+    "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+    "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+    "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+}
 
 hc = LUCIDAC()
 

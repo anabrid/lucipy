@@ -1152,6 +1152,7 @@ class Circuit(Reservoir, MIntBlock, Routing, Probes):
         target = self.alloc(Out, front_port) # None passes to default alloc None!
         return self.add(Connection(source, target))
     
+    
     def load(self, config_message):
         """
         Loads the configuration which :meth:`generate` spills out. The full circle.

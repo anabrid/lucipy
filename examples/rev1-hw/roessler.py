@@ -31,8 +31,8 @@ r.connect(mz,    prod.a, weight = -1)
 r.connect(x,     prod.b)
 r.connect(const, prod.b, weight = -0.3796)
 
-r.probe(x, front_port=6)
-r.probe(my, front_port=7)
+r.probe(x, front_port=5)
+r.probe(my, front_port=6)
 
 #r.measure(x)
 #r.measure(my)
@@ -41,13 +41,21 @@ hc = LUCIDAC()
 
 
 hc.reset_circuit()
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 
 # filter out M1 because there is nothing to set
 # and MCU complains if I try to configure something nonexisting
 config = { k: v for k,v in r.generate().items() if not "/M1" in k }
+
+
+# These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
+config["/0"]["/M1"]["calibration"] = {
+    "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+    "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+    "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+}
 
 print(config)
 

@@ -52,15 +52,15 @@ hc = LUCIDAC()
 hc.sock.sock.debug_print = True
 hc.reset_circuit(dict(keep_calibration=False))
 
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 config = vdp.generate()
-
+# These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
 config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [0, 0, 0, 0],
-    "offset_y": [0, 0, 0, 0],
-    "offset_z": [-0.035, -0.027, -0.029, -0.030]
+    "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
+    "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
+    "offset_z": [-0.038, -0.033, -0.0317, -0.033]
 }
 
 import json
