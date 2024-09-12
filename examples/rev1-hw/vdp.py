@@ -52,8 +52,10 @@ hc = LUCIDAC()
 hc.sock.sock.debug_print = True
 hc.reset_circuit(dict(keep_calibration=False))
 
-#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+
+#hc.set_by_path(["0", "SH"], {"state": "TRACK_AT_IC"})
 
 config = vdp.generate()
 # These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.

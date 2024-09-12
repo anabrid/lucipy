@@ -57,6 +57,11 @@ hc = LUCIDAC()
 
 hc.reset_circuit(dict(keep_calibration=False))
 
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+
+hc.set_by_path(["0", "SH"], {"state": "TRACK_AT_IC"})
+
 hc.set_circuit(
     config,
 )

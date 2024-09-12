@@ -8,6 +8,7 @@
 
 from lucipy import Circuit, Simulation, LUCIDAC, Route
 from time import sleep
+from lucipy.synchc import RemoteError
 
 r = Circuit()                           # Create a circuit
 
@@ -34,13 +35,14 @@ r.connect(const, prod.b, weight = -0.3796)
 r.probe(x, front_port=5)
 r.probe(my, front_port=6)
 
-#r.measure(x)
-#r.measure(my)
+r.measure(x)
+r.measure(my)
 
 hc = LUCIDAC()
+hc.sock.sock.debug_print = True
 
+hc.reset_circuit(dict(keep_calibration=False))
 
-hc.reset_circuit()
 #hc.set_by_path(["0", "SH"], {"state": "TRACK"})
 #hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
@@ -61,7 +63,7 @@ print(config)
 
 hc.set_config(config)
 
-manual_control = True
+manual_control = False
 
 if manual_control:
     hc.manual_mode("ic")
@@ -69,12 +71,19 @@ if manual_control:
     hc.manual_mode("op")
     #sleep(0.5)
 else:
-    hc.set_daq(num_channels=2)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, op_time=100_500_000, no_streaming=True)
-
-    from pylab import *
-    x, y = array(hc.start_run().data()).T
+    hc.set_op_time(ms=5)
+    hc.run_config.ic_time_us = 200
+    hc.run_config.streaming = False
+    hc.run_config.calibrate = False
     
-    plot(x)
-    plot(y)
-    show()
+    #hc.daq_config.num_channels = 0
+
+    if hc.daq_config.num_channels == 0:
+        hc.start_run()
+    else:
+        from pylab import *
+        x, y = array(hc.start_run().data()).T
+    
+        plot(x)
+        plot(y)
+        show()
