@@ -54,10 +54,10 @@ m.probe(ym, front_port=4)
 
 hc = LUCIDAC()
 hc.sock.sock.debug_print = True
-hc.reset_circuit(dict(keep_calibration=False))
+#hc.reset_circuit(dict(keep_calibration=False))
 
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 #hc.set_by_path(["0", "SH"], {"state": "TRACK_AT_IC"})
 
@@ -76,7 +76,7 @@ print(json.dumps(config))
 # ALL values upscaled
 #config["/0"]["/I"]["upscaling"] = [True]*32
 
-hc.one_shot_daq() # this initializes the daq
+#hc.one_shot_daq() # this initializes the daq
 
 hc.set_circuit(config)
 

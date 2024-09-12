@@ -515,7 +515,14 @@ class LUCIDAC:
         areKfast = [ isFast(intConfig.get("k",None)) for intConfig in mIntConfig ]
         return fast_ic_time if all(areKfast) else slow_ic_time
     
-    def set_circuit(self, carrier_config, **further_commands):
+    def set_circuit(self,
+            carrier_config,
+            reset_before=True,
+            sh_kludge=True,
+            calibrate_mblock=False,
+            calibrate_offset=False,
+            calibrate_routes=False,
+            **further_commands):
         """
         This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
         in particular the :func:`~lucipy.circuits.Circuit.generate` method can help to
@@ -524,17 +531,31 @@ class LUCIDAC:
         Typically a configuration looks a bit like ``{"/0": {"/U": [....], "/C":[....], ...}}``,
         i.e. the entities for a single cluster. There is only one cluster in LUCIDAC.
         
+        :param reset_before: Reset circuit configuration on device before setting the new one.
+           Pass ``False`` for incrementally updating the configuration.
+        :param sh_kludge: Make a SH Track-Inject cycle (after potential reset) before applying
+           the configuration on the LUCIDAC.
+        :param calibrate_...: Perform the device calibration scheme. Currently disabled.
+        
         .. note::
         
            This also determines the ideal IC time *if* that has not been set
            before (either manually or in a previous run).
         """
-        outer_config = {
-            "entity": [self.get_mac()], # str(cluster_index)], # was "0", NOT "/0"
-            "config": carrier_config,
+        
+        outer_config = dict(
+            entity = [self.get_mac()], # str(cluster_index)], # was "0", NOT "/0"
+            config =  carrier_config,
+            
+            reset_before = reset_before,
+            sh_kludge = sh_kludge,
+            calibrate_mblock = calibrate_mblock,
+            calibrate_offset = calibrate_offset,
+            calibrate_routes = calibrate_routes,
+            
             **further_commands
-        }
-        #print(outer_config)
+        )
+        print(outer_config)
 
         if "/0" in carrier_config:
             cluster_config = carrier_config["/0"]
