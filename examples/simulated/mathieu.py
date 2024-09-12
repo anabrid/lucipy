@@ -9,7 +9,7 @@ import numpy as np
 # These are the two parameters of Mathieu's equation which have to 
 # be varied to get a stability map. 0 <= a <= 8 and 0 <= q <= 5.
 a = 3
-q = 1
+q = 3
 
 # First we need an amplitude stabilised cosine signal. Since we do not have
 # limiters at the moment, we use a van der Pol-oscillator for that purpose.
@@ -51,7 +51,7 @@ m.connect(ym, p.b, weight = 2)
 ################################################################################
 # Run simulation
 sim     = Simulation(m)                  # Create simulation object
-t_final = 40
+t_final = 100
 
 #  The integration scheme used has a significant impact on the correctness of 
 # the solution as does the interval between time steps.
