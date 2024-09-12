@@ -491,6 +491,8 @@ class LUCIDAC:
         entities = self.query("get_entities")["entities"]
         mac = list(entities.keys())[0]
         # todo, assert that all this went fine, i.e. no KeyErrors or similar
+        if mac[0] == "/": # if entity begins like "/04-E9-E5", wipe "/"
+            mac = mac[1:]        
         assert self.hc_mac == None or mac == self.hc_mac, "Inconsistent device mac"
         self.hc_mac = mac
         return entities
@@ -759,17 +761,21 @@ class LUCIDAC:
             self.repetitive = repetitive
         return self.run_config
 
-    def start_run(self) -> Run:
+    def start_run(self, clear_queue=True) -> Run:
         """
         Uses the set_run and set_daq as before.
         Returns a Run object which allows to read all data.
+        
+        :param clear_queue: Clear queue before submitting, making sure any leftover
+           repetitive run is wiped.
         """
 
         start_run_msg = dict(
             id = str(uuid.uuid4()),
             session = None,
             config = self.run_config,
-            daq_config = self.daq_config
+            daq_config = self.daq_config,
+            clear_queue = clear_queue
         )
         
         self.slurp() # slurp old run data or similar
