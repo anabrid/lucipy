@@ -52,10 +52,9 @@ hc = LUCIDAC()
 
 print(hc.get_entities())
 
-hc.reset_circuit(dict(keep_calibration=False))
-
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
+#hc.reset_circuit(dict(keep_calibration=False))
+#hc.set_by_path(["0", "SH"], {"state": "TRACK"})
+#hc.set_by_path(["0", "SH"], {"state": "INJECT"})
 
 
 config = sprott.generate()
