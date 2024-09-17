@@ -563,7 +563,7 @@ class LUCIDAC:
         outer_config = {**outer_config, **self.circuit_options}
         outer_config = {**outer_config, **further_commands}
         
-        print(f"set_circuit {outer_config=}")
+        #print(f"set_circuit {outer_config=}")
 
         if "/0" in carrier_config:
             cluster_config = carrier_config["/0"]

@@ -23,7 +23,7 @@ l.connect(mx, xy.a)                     # Product -x * -y = xy
 l.connect(my, xy.b)
 
 l.connect(my, mx, weight = -a)
-l.connect(mx, mx, weight = a*0.9)       # 0.9 increases stability
+l.connect(mx, mx, weight = a*0.8)       # 0.8 increases stability
 
 l.connect(mx, my, weight = -b)
 l.connect(xz, my, weight = -5)
