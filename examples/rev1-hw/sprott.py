@@ -27,12 +27,12 @@ if True:
     mz      = sprott.int()
     mxy     = sprott.mul()
     yz      = sprott.mul()
-    const   = sprott.const()
+    const   = sprott.const(1)
     
     # FFM
-    sprott.probe(mx, front_port=5)
-    sprott.probe(my, front_port=6)
-    sprott.probe(mz, front_port=7)
+    sprott.probe(mx, front_port=0)
+    sprott.probe(my, front_port=1)
+    sprott.probe(mz, front_port=2)
     
     # ULM:
     #sprott.probe(mx, front_port=0)
@@ -77,13 +77,11 @@ else:
 
 
 
-#sprott.measure(mx)
-#sprott.measure(my)
-#sprott.measure(mz)
+sprott.measure(mx)
+sprott.measure(my)
+sprott.measure(mz)
 
 hc = LUCIDAC()
-
-print(hc.get_entities())
 
 hc.reset_circuit(dict(keep_calibration=False))
 #hc.set_by_path(["0", "SH"], {"state": "TRACK"})
@@ -92,19 +90,23 @@ hc.reset_circuit(dict(keep_calibration=False))
 
 config = sprott.generate()
 
+# S/N 0 device
 if False:
-    # These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
     config["/0"]["/M1"]["calibration"] = {
-        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
-        "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
-        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+        "offset_x": [ -0.002, -0.002 ,  -0.0015, -0.005  ], # !!! offset_x = input B !!!
+        "offset_y": [ +0.002,  0.0015,   0.0035,  0.0    ], # !!! offset_y = input A !!!
+        "offset_z": [ -0.026, -0.027 ,  -0.028 , -0.0325 ],
+        
+        "write_eeprom": True
     }
-
-config["/0"]["/M1"]["calibration"] = {
-        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
-        "offset_y": [ 0.0,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
-        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
-}
+    hc.circuit_options.mul_calib_kludge = False
+elif False:
+    config["/0"]["/M1"] = {
+        "read_calibration_from_eeprom": True
+    }
+    hc.circuit_options.mul_calib_kludge = False
+else:
+    pass
 
 print(config)
 
@@ -112,7 +114,7 @@ hc.set_circuit(
     config,
 #    calibrate_offset = True,
 #    calibrate_routes = True,
-    #calibrate_mblock = False,
+    #calibrate_mblock = True,
 )
 
 print(hc.get_circuit())
@@ -125,7 +127,7 @@ if manual_control:
     hc.manual_mode("op")
     #sleep(0.5)
 else:
-    hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+    hc.set_run(halt_on_overload=False, ic_time=200_000) #, no_streaming=True
     hc.set_op_time(us=100)#ms=30)
 
     run = hc.start_run()

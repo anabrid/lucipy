@@ -418,6 +418,16 @@ class LUCIDAC:
             sample_rate = 500_000,
         )
         
+        #: Storage for additional configuration options which go next to each set_circuit call
+        self.circuit_options = dotdict(
+            reset_before=True,
+            sh_kludge=True,
+            mul_calib_kludge=True,
+            calibrate_mblock=False,
+            calibrate_offset=False,
+            calibrate_routes=False,
+        )
+        
         # remember credentials for later use
         self.user = endpoint.user
         self.password = endpoint.password
@@ -446,6 +456,9 @@ class LUCIDAC:
         resp = dotdict(self.sock.read())
         if ignore_run_state_change and "type" in resp and resp.type == "run_state_change":
             log.info(f"run_state_change: {resp.msg}")
+            return self._recv(sent_envelope, ignore_run_state_change=True)
+        if "type" in resp and resp.type == "log":
+            log.info(f"Device Log {resp}")#[{resp.time}] {resp.msg}")
             return self._recv(sent_envelope, ignore_run_state_change=True)
         if sent_envelope == resp:
             # This is a serial socket replying first what was typed. Read another time.
@@ -517,11 +530,6 @@ class LUCIDAC:
     
     def set_circuit(self,
             carrier_config,
-            reset_before=True,
-            sh_kludge=True,
-            calibrate_mblock=False,
-            calibrate_offset=False,
-            calibrate_routes=False,
             **further_commands):
         """
         This sets a carrier level configuration. The :mod:`~lucipy.circuits` module and
@@ -543,19 +551,19 @@ class LUCIDAC:
            before (either manually or in a previous run).
         """
         
+        from .circuits import Circuit
+        if isinstance(carrier_config, Circuit): # or Routing or ...
+            carrier_config = carrier_config.generate()
+        
         outer_config = dict(
             entity = [self.get_mac()], # str(cluster_index)], # was "0", NOT "/0"
-            config =  carrier_config,
-            
-            reset_before = reset_before,
-            sh_kludge = sh_kludge,
-            calibrate_mblock = calibrate_mblock,
-            calibrate_offset = calibrate_offset,
-            calibrate_routes = calibrate_routes,
-            
-            **further_commands
+            config =  carrier_config
         )
-        print(outer_config)
+        
+        outer_config = {**outer_config, **self.circuit_options}
+        outer_config = {**outer_config, **further_commands}
+        
+        print(f"set_circuit {outer_config=}")
 
         if "/0" in carrier_config:
             cluster_config = carrier_config["/0"]
@@ -671,21 +679,21 @@ class LUCIDAC:
         cluster_index = 0
         outer_config = {
             "entity": [self.get_mac()] + path, #[self.get_mac(), str(cluster_index)] + path,
-            "config": config
+            "config": config,
+            **self.circuit_options
         }
         return self.query("set_circuit", outer_config)
     
     def set_leds(self, leds_as_integer):
-        # Cannot use set_circuit because it operates only on th Carrier
-        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": { "leds": leds_as_integer } })
+        return self.set_by_path("FP", { "leds": leds_as_integer })
         
     def signal_generator(self, dac=None):
         """
         :args dac: Digital analog converter outputs, as there are two a list with two floats (normalized [-1,+1]) is expected
         """
-        return self.query("set_circuit", {"entity": [self.get_mac(), "FP" ], "config": {
+        return self.set_by_path("FP", {
             "signal_generator":  { "dac_outputs": dac, "sleep": False }
-        } })
+        })
     
     def set_op_time(self, *, ns=0, us=0, ms=0, sec=0, k0fast=0, k0slow=0):
         """

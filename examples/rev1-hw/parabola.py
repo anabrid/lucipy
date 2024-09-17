@@ -21,12 +21,13 @@ test.route(t, 3, 1.0, m.b)
 #test.measure(x)
 #test.measure(y)
 
-test.probe(t, front_port=5)
-test.probe(t2, front_port=6)
-test.probe(m, front_port=7)
+test.probe(t,  front_port=0)
+test.probe(t2, front_port=1)
+test.probe(m,  front_port=2)
 
 
 hc = LUCIDAC()
+hc.sock.sock.debug_print = True
 
 hc.reset_circuit(dict(keep_calibration=False))
 
@@ -35,18 +36,22 @@ hc.reset_circuit(dict(keep_calibration=False))
 
 config = test.generate()
 
-config["/0"]["/M1"]["calibration"] = {
-        "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
-        "offset_y": [ 0.0,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
-        "offset_z": [-0.038, -0.033, -0.0317, -0.033]
-}
+if True:
+    config["/0"]["/M1"]["calibration"] = {
+            "offset_x": [ 0.0,    0.0  ,  0.0  ,   0.0  ], # !!! offset_x = input B !!!
+            "offset_y": [ 0.0,    0.0,    0.0  ,   0.0  ], # !!! offset_y = input A !!!
+            "offset_z": [ 0.0  ,  0.0  ,  0.0  ,   0.0  ]
+    }
 
 print(config)
+
+hc.circuit_options.reset_circuit = True
+hc.circuit_options.sh_kludge = True
 
 hc.set_circuit(
     config,
 #    calibrate_offset = True,
-#    calibrate_routes = True,
+    #   calibrate_routes = True,  #<--- in ulm
 #    calibrate_mblock = True,
 )
 
@@ -71,7 +76,7 @@ else:
     hc.run_config.repetitive = True
     hc.run_config.streaming = False
     hc.run_config.write_run_state_changes = False
-    hc.run_config.calibrate = False
+    hc.run_config.calibrate = False  #<!-- das haben sie in ulm an
     
     #hc.stop_run()
     run = hc.start_run()

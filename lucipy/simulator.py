@@ -66,6 +66,8 @@ class Simulation:
     * Note that by default ``k0`` is implemented in a way that ``1 time unit = 10_000``
       and ``k0`` slow results are thus divided by ``100`` in time. Use ``realtime``
       to measure simulation time in seconds instead.
+    * Does not implement anything calibration-related, since it assumes ideal computing
+      elements anyway
     
     :arg circuit: An :class:`circuits.Circuit` object. We basically only need it
       in order to make use of the :meth:`~circuits.Circuit.to_dense_matrix` call.
@@ -545,7 +547,7 @@ class Emulation:
         return self.get_circuit()
     
     @expose
-    def set_config(self, entity, config):
+    def set_circuit(self, entity, config, reset_before=False, sh_kludge=None, calibrate_mblock=None, calibrate_offset=None, calibrate_routes=None):
         """
         Set circuit configuration.
         
@@ -561,6 +563,10 @@ class Emulation:
         """
         if entity[0] != self.mac:
             return {"error": "Configuration for wrong (emulated) carrier"}
+        
+        if reset_before:
+            self.reset_circuit()
+
         if len(entity) == 1:
             self.circuit = config # carrier root level
             return
@@ -577,12 +583,6 @@ class Emulation:
         except KeyError as e:
             return {"error": "Asked for entity path {entity} but the following entity or element was not found: {e}"}
         parent[child_key] = config
-        
-    @expose
-    def set_circuit(self, entity, config):
-        "Alias: Set circuit configuration"
-        return self.set_config(entity, config)
-    
     
     default_run_config = {
         "halt_on_external_trigger": False,

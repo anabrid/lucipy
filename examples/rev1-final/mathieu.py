@@ -1,5 +1,7 @@
- #
+#
 # Mathieu's differential equation
+# Not part of guidebook (v0.1) but Bernd's favourite equation
+# See https://analogparadigm.com/downloads/alpaca_10.pdf
 #
 
 from lucipy import Circuit, LUCIDAC
@@ -49,36 +51,12 @@ m.connect(y, p.a)
 m.connect(ym, p.b, weight = 2)
 
 
-m.probe(ym, front_port=4)
+m.probe(ym, front_port=0)
 
 
 hc = LUCIDAC()
-hc.sock.sock.debug_print = True
-hc.reset_circuit(dict(keep_calibration=False))
 
-hc.set_by_path(["0", "SH"], {"state": "TRACK"})
-hc.set_by_path(["0", "SH"], {"state": "INJECT"})
-
-#hc.set_by_path(["0", "SH"], {"state": "TRACK_AT_IC"})
-
-config = m.generate()
-# These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
-config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
-    "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
-    "offset_z": [-0.038, -0.033, -0.0317, -0.033]
-}
-
-import json
-
-print(json.dumps(config))
-
-# ALL values upscaled
-#config["/0"]["/I"]["upscaling"] = [True]*32
-
-hc.one_shot_daq() # this initializes the daq
-
-hc.set_circuit(config)
+hc.set_circuit(m)
 
 
 hc.manual_mode("ic")

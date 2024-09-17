@@ -4,8 +4,8 @@ from lucipy import *
 
 circuit = Circuit()
 
-m = circuit.mul(3)
-sin = 24 # external input, ACL_IN[0]
+m = circuit.mul(2)
+sin = 27 # external input, ACL_IN[3]
 
 # note that the ACL_in weights have no meaning
 # since the ACL_IN comes after the c-block
@@ -15,11 +15,11 @@ circuit.route(m, sin, 1.0, m.b)
 
 #circuit.connect(circuit.const(), m.b)
 
-circuit.measure(m)
+#circuit.measure(m)
 #circuit.measure(m1)
 #circuit.measure(m2)
 
-circuit.probe(m, front_port=5)
+circuit.probe(m, front_port=0)
 #circuit.probe(m, front_port=6)
 #circuit.probe(m, front_port=7)
 
@@ -35,9 +35,9 @@ config["acl_select"] = ["external"]*8
 
 # These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
 config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [ 0.0,   -0.003, -0.007,  -0.005], # !!! offset_x = input B !!!
-    "offset_y": [ 0.1,    0.0,    0.003,   0.0  ], # !!! offset_y = input A !!!
-    "offset_z": [-0.038, -0.033, -0.0317, -0.033]
+    "offset_x": [ -0.002, -0.002 ,  -0.0015, -0.005  ], # !!! offset_x = input B !!!
+    "offset_y": [ +0.002,  0.0015,   0.0035,  0.0    ], # !!! offset_y = input A !!!
+    "offset_z": [ -0.026, -0.027 ,  -0.028 , -0.0325 ]
 }
 
 print(config)

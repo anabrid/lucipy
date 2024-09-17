@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser()
 #parser.add_argument('config', nargs='?', type=argparse.FileType('r'), help="JSON configuration file. If none is given, will read from stdin")
 
 parser.add_argument('command', help="Actual command to run")
+parser.add_argument('--force', action="store_true", help="Really run it, even if client doesn't know it")
 
 args = parser.parse_args()
 
@@ -35,6 +36,10 @@ hc = LUCIDAC()
 if hasattr(hc, args.command):
     method = getattr(hc, args.command)
     res = method()
+    res_json = json.dumps(res, indent=4) # TODO: Make command line argument whether to format
+    print(res_json)
+elif args.force:
+    res = hc.query(args.command)
     res_json = json.dumps(res, indent=4) # TODO: Make command line argument whether to format
     print(res_json)
 else:

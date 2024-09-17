@@ -91,7 +91,7 @@ if static_analysis:
     
     
 else:
-    manual_control = True
+    manual_control = False
 
     if manual_control:
         hc.manual_mode("ic")
@@ -117,12 +117,24 @@ else:
         run = hc.start_run()
         data = array(run.data())
     
-        dso_colors = ["#fffe05", "#02faff", "#f807fb", "#007bff" ] # Rigol DHO14 ;)
-        plt.style.use("dark_background")
-        plt.title("LUCIDAC Real Hardware: Van-der-Pol oscillator")
-        plt.plot(data[:,0], label="mdy", color=dso_colors[0])
-        plt.plot(data[:,1], label="y_out", color=dso_colors[1])
-        plt.axhline(0, color="white")
-        plt.xlabel("Arbitrary units")
-        plt.legend()
-        plt.show()
+        imitate_rigol = False
+        if imitate_rigol:
+            dso_colors = ["#fffe05", "#02faff", "#f807fb", "#007bff" ] # Rigol DHO14 ;)
+            plt.style.use("dark_background")
+            plt.title("LUCIDAC Real Hardware: Van-der-Pol oscillator")
+            plt.plot(data[:,0], label="mdy", color=dso_colors[0])
+            plt.plot(data[:,1], label="y_out", color=dso_colors[1])
+            plt.axhline(0, color="white")
+            plt.xlabel("Arbitrary units")
+            plt.legend()
+            plt.show()
+        else:
+            time = linspace(0, 6, num=data.shape[0])
+            plt.title("LUCIDAC-internal data aquisition: Van-der-Pol oscillator")
+            plt.plot(time, data[:,0], label="-$\dot y$")
+            plt.plot(time, data[:,1], label="$y$")
+            plt.axhline(0, color="black")
+            plt.xlabel("Time [ms]")
+            plt.legend()
+            plt.show()
+            
