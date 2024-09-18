@@ -42,12 +42,16 @@ Public Development and Releases:
 
 * https://github.com/anabrid/lucipy public development repo
 * https://pypi.org/project/lucipy/ python package index listing
-* https://anabrid.github.io/lucipy/ sphinx documentation Github Actions generation target (github pages)
+* https://anabrid.dev/docs/lucipy/ built sphinx documentation (Gitlab-CI target self-hosted)
 
 Internal Development:
 
 * https://lab.analogparadigm.com/lucidac/software/simplehc.py internal development repo
-* https://anabrid.dev/docs/lucipy/ sphinx documentation Gitlab-CI target self-hosted
+
+Links outside this document:
+
+* https://anabrid.com/lucidac-user-manual.pdf LUCIDAC user documentation (first steps booklet)
+* https://anabrid.dev/docs/hybrid-controller/ LUCIDAC firmware (API) documentation
 
 
 

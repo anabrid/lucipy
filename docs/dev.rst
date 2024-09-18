@@ -57,10 +57,11 @@ Releases and Code Deployment
    downloadded `wheels <https://wheel.readthedocs.io/en/latest/>`_ is over.
 
 
-Strong Design Principles
-------------------------
+Design Principles
+-----------------
 
-These design principles are in the core of the lucipy design.
+Lucipy follows a few radical concepts to make it dead-simple to use the code. 
+  
 
 Python 3.8 compatibility
    We strieve for *Compatibility with Python 3.8*, released in 2020. Today in 2024, Python 3.8
@@ -90,7 +91,24 @@ Few imports and classes
    
    This also makes the lucipy API easily explorable from the python REPL (such as ipython).
    
+No performance price
+   Lucipy is not designed with performance in mind. Instead, the driving
+   principle is providing a pythonic API which uses as little advanced features as possible. The
+   main goal is to reduce noise for the user and have him to type as little as possible to steer
+   an analog computer, without compromises on what the user can do.
+
 No mandatory dependencies
+   Most of the code works without third party libraries. For instance, you can connect to
+   a LUCIDAC via TCP/IP, program a circuit, run it and get the data without any other
+   dependency, not even numpy. This makes it dead simple to take the code into use even in
+   heterogen and challenging situations, for instance on an old Mac with an old Python
+   version.
+   
+   Code parts which require dependencies, such as when using the Serial device interface,
+   import their dependency at method/function level. This results in a **late** ``ImportError``
+   failure, as one can expect from a scripting language.
+   
+   Here is a few more background context about this design decision:
    All of us went throught python dependency hell (obligatory `XKCD 1987 <https://xkcd.com/1987/>`_),
    isn't it? It can completely prevent users from getting any first step done. It also can
    frighten users to do an upgrade which potentially break things. Better not touch a working virtual
@@ -131,8 +149,8 @@ Implement the UNIX principle
    analog computing. We try to maximize what can be done with the code while keeping it as short as
    possible. Any code not written cannot produce bugs.
 
-Weak Design Principles
-----------------------
+Even more design principles
+---------------------------
 
 These design principles will probably change in the future.
 

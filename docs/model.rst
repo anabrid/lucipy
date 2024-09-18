@@ -21,8 +21,9 @@ On the reconfigurable analog circuit model
 
 .. note::
 
-   An in-depth description of the LUCIDAC hardware is out of scope for this manual. However,
-   given the poor overall documentation situation, a short overview is given at this point.
+   An in-depth description of the LUCIDAC hardware is out of scope for this manual. Please
+   refer to the `LUCIDAC user documentation <https://anabrid.com/lucidac-user-manual.pdf>`_
+   for an overview.
 
 The following figure gives a more detailed overview about the LUCIDAC internals. What is
 important to keep in mind that there is a distinguished *compute path* where the analog
