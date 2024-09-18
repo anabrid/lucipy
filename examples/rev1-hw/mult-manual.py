@@ -5,12 +5,12 @@ from lucipy import *
 circuit = Circuit()
 
 m = circuit.mul(3)
-sin = 27 # external input, ACL_IN[3]
+sin = 28 # external input, ACL_IN[3]
 
 # note that the ACL_in weights have no meaning
 # since the ACL_IN comes after the c-block
 
-#circuit.route(m, sin, 1.0, m.b)
+circuit.route(m, sin, 1.0, m.b)
 #circuit.connect(sin, m.b, weight=1)
 
 #circuit.connect(circuit.const(), m.b)
@@ -35,11 +35,10 @@ config["acl_select"] = ["external"]*8
 
 # These values come from manual calibration by BU and SK at 2024-09-10 for REV1@FFM.
 config["/0"]["/M1"]["calibration"] = {
-    "offset_x": [  -0.001   ,  -0.0025    ,  -0.003    ,  -0.001    ], # !!! offset_x = input B !!!
-    "offset_y": [   0.0015  ,   0.0015    ,   0.001    ,   0.0035   ], # !!! offset_y = input A !!!
-    "offset_z": [  -0.037   ,  -0.031     ,  -0.031    ,  +0.073    ],
-    
-    "write_eeprom": True,
+        "offset_x": [ 0.0   ,  -0.0049 ,  -0.007  ,  -0.005], # !!! offset_x = input B !!!
+        "offset_y": [ 0.1   ,   0.005  ,   0.004  ,   0.0  ], # !!! offset_y = input A !!!
+        "offset_z": [ -0.035,  -0.031  ,  -0.028  ,  -0.03 ],      
+        "write_eeprom": True,
 }
 
 hc.circuit_options.mul_calib_kludge = False

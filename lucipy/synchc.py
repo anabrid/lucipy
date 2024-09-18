@@ -378,6 +378,8 @@ class LUCIDAC:
     # Commands which can be memoized for a given endpoint/instance, makes
     # it cheaper to call them repeatedly
     memoizable = "sys_ident".split()
+    ## TODO: Get rid of this memoization because with arguments it can lead to weird errors, for instance
+    #    hc.sys_ident(dict(blink=True))  -> TypeError: unhashable type: 'dict'
     
     def __init__(self, endpoint_url=None, auto_reconnect=True):
         if not endpoint_url:
@@ -428,9 +430,11 @@ class LUCIDAC:
             calibrate_routes=False,
         )
         
-        # remember credentials for later use
         self.user = endpoint.user
         self.password = endpoint.password
+        
+        if self.user:
+            self.login()
     
     def __repr__(self):
         return f"LUCIDAC(\"{self.sock.sock}\")"
@@ -451,7 +455,7 @@ class LUCIDAC:
         self.req_id += 1
         self.sock.send(envelope)
         return envelope
-
+    
     def _recv(self, sent_envelope, ignore_run_state_change=True):
         resp = dotdict(self.sock.read())
         if ignore_run_state_change and "type" in resp and resp.type == "run_state_change":
@@ -492,6 +496,21 @@ class LUCIDAC:
            the connection in particular at beginning of a connection.
         """
         return list(self.sock.read_all())
+    
+    def login(self, user=None, password=None):
+        """
+        Login to the system. If no credentials are given, falls back to the one from the
+        endpoint URL.
+        """
+        if user == None:
+            user = self.user
+        if password == None:
+            password = self.password
+        if not user:
+            raise ClientError(f"Cannot login because no user name was given. Endpoint is {this.endpoint}")
+        # won't check on empty password despite it also is basically an error
+        return self.query("login", dict(user=user, password=password))
+        
     
     def get_mac(self):
         "Get system ethernet mac address. Is cached."
