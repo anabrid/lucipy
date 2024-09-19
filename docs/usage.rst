@@ -5,8 +5,7 @@ Basic patterns and usage
 
 This page gives an introductory overview about how the code can be used to solve common
 problems. This shall not replace a general introduction about the LUCIDAC computer and its
-abilities. This can be read in the *lucidoc* end user documentation (to be linked here
-as PDF once it is ready).
+abilities. This can be read in the `end user documentation <https://anabrid.dev/docs/lucidac-user-docs.pdf>`_.
 
 
 Interactive use

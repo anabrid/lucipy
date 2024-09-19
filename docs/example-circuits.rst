@@ -17,6 +17,13 @@ The following examples are short single file standalone scripts which you can do
 execute if you have lucipy installed. You can find them in the ``examples`` directory of
 the lucipy repository.
 
+Simulations
+...........
+
+These examples run straight out of the box and demonstrate how to configure a LUCIDAC circuit.
+Subsequently, the examples are solved in a digital simulator right within Python and the
+result is showed in a plot. Therefore, no hardware is required.
+
 :download:`Rössler <../examples/simulated/roessler.py>`
    Rössler attractor on LUCIDAC, as from 
    `Analog Paradigm Application Note 1 <https://analogparadigm.com/downloads/alpaca_1.pdf>`_.
@@ -87,6 +94,16 @@ the lucipy repository.
 
 :download:`A hyperchaotic system including a quartic term <../examples/simulated/hyperchaos.py>`
     A hyperchaotic system including a quartic term. (Software simulation)
+
+Demonstrator applications from booklet
+......................................
+
+These examples are part of the `User handbook <https://anabrid.dev/docs/lucidac-user-docs.pdf>`_.
+They are basically a subset of the examples given above. You can find them all in the
+``examples/rev1-final`` directory. In order to run, they need the ``LUCIDAC_ENDPOINT``
+environment variable set and/or a Lucidac connected to USB/the same network. Since most
+examples work without data aquisition, you currently cannot run them against the
+emulator, i.e. when you use ``LUCIDAC_ENDPOINT="emu://"`` you won't get output.
 
 Jupyter notebooks
 -----------------
