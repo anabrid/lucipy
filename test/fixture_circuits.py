@@ -94,7 +94,7 @@ def measure_sinus(hc, i0, i1, l0, l1):
     hc.set_op_time(us=900)
     
     # activate Non-FlexIO code
-    hc.run_config.no_streaming = True
+    #hc.run_config.no_streaming = True
     
     data = np.array(hc.start_run().data())
     x_measured, y_measured = data[:,0], data[:,1]
@@ -163,7 +163,7 @@ def measure_ramp(hc, slope=1, lane=0, const_value=+1, slow=False, do_assert=Fals
     hc.set_circuit(conf)
     ic_time_ns = 90_000_000 if slow else 200_000
     op_time_ns = 200_000 * slow_time/downscaling
-    hc.set_run(halt_on_overload=False, ic_time=ic_time_ns, op_time=op_time_ns, no_streaming=True)
+    hc.set_run(halt_on_overload=False, ic_time=ic_time_ns, op_time=op_time_ns)#, no_streaming=True)
 
     run = hc.start_run()
     data = np.array(run.data())
@@ -214,7 +214,7 @@ def measure_exp(hc, alpha=-1, ic=+1, lane=0):
     e.measure(i)
     hc.set_circuit( e.generate(skip="/M1") )
     hc.set_daq(num_channels=1)
-    hc.set_run(halt_on_overload=False, ic_time=200_000, no_streaming=True)
+    hc.set_run(halt_on_overload=False, ic_time=200_000)#, no_streaming=True)
     hc.set_op_time(us=200)#k0fast=t_final)
     
     data = np.array(hc.start_run().data())

@@ -408,8 +408,22 @@ class LUCIDAC:
         self.run_config = dotdict(
             halt_on_external_trigger = False,
             halt_on_overload  = True,
-            ic_time = 123456, # ns 
-            op_time = 234567, # ns
+            
+            # default way of specifying the ic_time/op_time in nanoseconds
+            ic_time = 123456,
+            op_time = 234567,
+            
+            # and additional ways of providing that time...
+            ic_time_ns = 0,
+            ic_time_us = 0,
+            ic_time_ms = 0,
+            ic_time_sec = 0,
+            op_time_ns = 0,
+            op_time_us = 0,
+            op_time_ms = 0,
+            op_time_sec = 0,
+            
+            unlimited_op_time = False
         )
 
         #: Storage for stateful preparation of runs.
@@ -715,7 +729,7 @@ class LUCIDAC:
             "signal_generator":  { "dac_outputs": dac, "sleep": False }
         })
     
-    def set_op_time(self, *, ns=0, us=0, ms=0, sec=0, k0fast=0, k0slow=0):
+    def set_op_time(self, *, ns=0, us=0, ms=0, sec=0, k0fast=0, k0slow=0, unlimited=False):
         """
         Sets OP-Time with clear units. Returns computed value, which is just the **sum of
         all arguments**.
@@ -736,11 +750,13 @@ class LUCIDAC:
                integrates a constant 1 from initial value 0 to final value 1.
         :param k0slow: units of k0slow. A slow integrators computes within time ``k0slow=1``
                a constant 1 from initial vlaue 0 to final value 1.
+        :param unlimted: Infinite OP-Time (will only stop once being send the ``stop_run`` command)
 
         """
         optime_ns  = ns + us*1e3 + ms*1e6 + sec*1e9
         optime_ns += k0fast*1e5 + k0slow*1e7
         self.run_config.op_time = int(optime_ns)
+        self.run_config.unlimited_op_time = unlimited
         return self.run_config.op_time
     
     #: Sample rates per second accepted by the system.
@@ -782,10 +798,15 @@ class LUCIDAC:
             halt_on_overload = None,
             ic_time = None,
             op_time = None,
-            no_streaming = None,
+            unlimited_op_time = None,
+            streaming = None,
             repetitive = None,
             ):
         """
+        Set basic configuration for any upcoming run. This will be the baseline for any run-specific
+        configuration. See also :meth:`set_op_time` for a more practical way of setting the op_time.
+        See also :meth:`start_run` for actually starting a run.
+        
         :param halt_on_external_trigger: Whether halt the run if external input triggers
         :param halt_on_overload: Whether halt the run if overload occurs during computation
         :param ic_time: Request time to load initial conditions, in nanoseconds.
@@ -804,28 +825,54 @@ class LUCIDAC:
             self.run_config.ic_time = ic_time
         if op_time != None:
             self.run_config.op_time = op_time
-        if no_streaming != None:
-            self.run_config.no_streaming = no_streaming
+        if unlimited_op_time != None:
+            self.run_config.unlimited_op_time = unlimited_op_time
+        if streaming != None:
+            self.run_config.streaming = streaming
         if repetitive != None:
             self.repetitive = repetitive
         return self.run_config
 
-    def start_run(self, clear_queue=True) -> Run:
+    def start_run(self, clear_queue=True, **run_and_daq_config) -> Run:
         """
-        Uses the set_run and set_daq as before.
-        Returns a Run object which allows to read all data.
-        
+        Start a run on the LUCIDAC. A run is a IC/OP cycle. See :class:`Run` for details.
+        In order to configurer the run, use :meth:`set_run` and :meth:`set_daq` before
+        calling this method.
+       
+        :returns: a Run object which allows to read in the DAQ data.
         :param clear_queue: Clear queue before submitting, making sure any leftover
-           repetitive run is wiped.
+           repetitive run is wiped. This is equivalent to calling :meth:`stop_run` before
+            this method.
         """
+        
+        for k,v in run_and_daq_config.items():
+            if k in self.run_config:
+                self.run_config[k] = v
+            elif k in self.daq_config:
+                self.daq_config[k] = v
+            elif k == "op_time_unlimited": # another fix
+                self.run_config["unlimited_op_time"] = v
+            else:
+                raise KeyError(f"Unknown configuration key '{k}'. Please manually assign to run_config, daq_config or elsewhere.")
 
-        start_run_msg = dict(
+        start_run_msg = dotdict(
             id = str(uuid.uuid4()),
             session = None,
             config = self.run_config,
             daq_config = self.daq_config,
             clear_queue = clear_queue
         )
+      
+        # this is a hot-fix for being able to run guidebook examples with
+        # old v1.0.0 firmware. Should be removed in the near future (end of 2024)
+        if start_run_msg.config.unlimited_op_time == True and not "skip_unlimited_optime_kludge" in start_run_msg.config:
+            if start_run_msg.daq_config.num_channels != 0:
+                print("LUCIDAC.start_run: Mocking client-side unlimited run, will not acquire data.")
+            self.manual_mode("ic")
+            from time import sleep
+            sleep(0.5)
+            self.manual_mode("op")
+            return None
         
         self.slurp() # slurp old run data or similar
         ret = self.query("start_run", start_run_msg)
@@ -833,6 +880,10 @@ class LUCIDAC:
             raise LocalError(f"Run did not start successfully. Expected answer to 'start_run' but got {ret=}")
     
         return Run(self)
+    
+    def run(self, **kwargs) -> Run:
+        "Alias for :meth:`start_run`. See there for details."
+        return self.start_run(**kwargs)
     
     def manual_mode(self, to:str):
         "manual mode control"

@@ -39,6 +39,4 @@ r.probe(my, front_port=1)
 hc = LUCIDAC()
 hc.set_config(r)
 
-hc.manual_mode("ic")
-sleep(0.5)
-hc.manual_mode("op")
+hc.run(op_time_unlimited=True)
