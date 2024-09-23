@@ -37,12 +37,9 @@ l.probe(my, front_port=1)
 l.probe(mz, front_port=2)
 
 hc = LUCIDAC()
-
 hc.set_circuit(l)
 
-hc.manual_mode("ic")
-from time import sleep
-sleep(0.2)
-hc.manual_mode("op")
+hc.set_op_time(unlimited=True)
+hc.start_run()
 
 

@@ -43,9 +43,5 @@ hr.probe(mz, front_port=2, weight=-1)
 hc = LUCIDAC()
 
 hc.set_circuit(hr)
-
-hc.manual_mode("ic")
-from time import sleep
-sleep(0.2)
-hc.manual_mode("op")
+hc.run(op_time_unlimited=True)
 
