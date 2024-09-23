@@ -1060,8 +1060,7 @@ class Routing(Probes):
         >>> import numpy as np
         >>> c = Circuit().randomize()
         >>> U, C, I = c.to_dense_matrices(sanity_check=False) # skipping for doctesting
-        >>> np.all(I.dot(C.dot(U)) == c.to_dense_matrix(sanity_check=False))
-        np.True_
+        >>> assert np.all(I.dot(C.dot(U)) == c.to_dense_matrix(sanity_check=False)) == True
         
         Limitations: This omits all information about ``acl_select`` and the constant
         giver scheme.
