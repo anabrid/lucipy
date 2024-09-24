@@ -1,13 +1,12 @@
 .. _dev:
 
-Developer guide
+Developer notes
 ===============
 
-For getting started as a developer, first follow the :ref:`installation` guide.
+For getting started as a developer working *on* the lucipy code, first follow the :ref:`installation` guide.
 
-Technical notes
----------------
-
+Code development
+----------------
 Repositories
    We have an internal gitlab with https://lab.analogparadigm.com/lucidac/software/simplehc.py
    where we have tickets. There should be an automatical two way mirroring to 
@@ -20,21 +19,7 @@ Continous Integration
 
    The CI runs the tests, builds the docs and uploads the docs. The CIs at Github and Gitlab do the same,
    in the moment.
-
-Testing
-   We use `Pytest <https://docs.pytest.org>`_ and `doctest <https://docs.python.org/3/library/doctest.html>`_
-   for testing our codes. Please inspect the ``Makefile`` in order to see how to invoke the tests. In general,
-   ``make test`` should just get you started.
    
-   We extensively use *doctests* because it is great. If you wonder whether to write a doctest or a unit
-   test, use a doctest. They have a lot of benefits, because they enter the documentation, serve as testing
-   the stability of the API and are closely related to the code they test. Our unit tests are mainly
-   *integration tests* which cannot be reasonably covered by doctests.
-   
-   We can also test against real LUCIDAC hardware. These tests run automatically when the environment
-   variable ``LUCIDAC_ENDPOINT`` is given. GNU Make makes this easy, just call it with, for instance,
-   ``make unittests LUCIDAC_ENDPOINT="tcp://192.168.150.229:5732``.
-
 Documentation
    We are using the `Sphinx Documentation <https://www.sphinx-doc.org/>`_ system. You are invited to contribute
    documentation. The usability of code rises and falls with the code documentation provided. This not
@@ -55,7 +40,6 @@ Releases and Code Deployment
    
    We don't make Github releases as the time of manually installing
    downloadded `wheels <https://wheel.readthedocs.io/en/latest/>`_ is over.
-
 
 Design Principles
 -----------------
