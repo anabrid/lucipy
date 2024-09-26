@@ -208,8 +208,9 @@ class emusocket:
 
 class jsonlines:
     "Middleware that speaks dictionaries at front and JSON at back"
-    def __init__(self, actual_socket):
+    def __init__(self, actual_socket, ignore_invalid_json_reads=False):
         self.sock = actual_socket
+        self.ignore_invalid_json_reads = ignore_invalid_json_reads
     @staticmethod
     def makeSocket(cls, actual_socket_type, *args, **kwargs):
         return cls(actual_socket_type(*args, **kwargs))
@@ -228,7 +229,11 @@ class jsonlines:
         try:
             return json.loads(read)
         except json.JSONDecodeError as s:
-            raise LocalError(f"Could not decode as JSON: {s}. Received message ({len(read)} characters) is '{read}'")
+            if self.ignore_invalid_json_reads:
+                log.info(f"Received non-JSON message: '{read}'. Will read again")
+                return self.read(*args, **kwargs)
+            else:
+                raise LocalError(f"Could not decode as JSON: {s}. Received message ({len(read)} characters) is '{read}'")
     def close(self):
         return self.sock.close()
     def read_all(self):
@@ -397,7 +402,7 @@ class LUCIDAC:
 
         endpoint = Endpoint(endpoint_url)
         socket = endpoint2socket(endpoint_url)
-        self.sock = jsonlines(socket)
+        self.sock = jsonlines(socket, ignore_invalid_json_reads = endpoint.scheme == "serial")
         self.req_id = 50
         
         #: Ethernet Mac address of Microcontroller, required for the circuit entity hierarchy
