@@ -10,7 +10,7 @@ then one device, use the --all option.
 """
 
 # all python included
-import asyncio, logging, socket, sys, argparse, inspect, ast, pathlib, time, collections, itertools, urllib, re
+import asyncio, logging, socket, sys, argparse, inspect, ast, pathlib, time, collections, itertools, urllib.parse, re
 from typing import Any, Optional, List, cast, Iterator
 
 try:
