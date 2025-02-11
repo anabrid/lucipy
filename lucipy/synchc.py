@@ -136,7 +136,7 @@ class tcpsocket:
                 print(f"tcpsocket.read() = {line}")
             return line
         except UnicodeDecodeError as e:
-            print(e)
+            print(f"tcpsocket.read(): {e}. Input Bytes are: {e.object}")
             return ""
         except ConnectionResetError as e:
             if self.debug_print:
@@ -166,15 +166,15 @@ class serialsocket:
     def close(self):
         return self.fh.close()
     def send(self, sth):
-        #print(f"serialsocket.send({sth})")
+        print(f"serialsocket.send({sth})")
         self.fh.write(sth.encode("ascii") + b"\n")
         self.fh.flush()
-        #print(f"serialsocket.send completed")
+        print(f"serialsocket.send completed")
     def read(self):
         # block until have read exactly one line
         while self.has_data():
             ret = self.fh.readline()
-            #print(f"serialsocket.read(): {ret}")
+            print(f"serialsocket.read(): {ret}")
             return ret
     def has_data(self):
         return has_data(self.fh)
@@ -221,7 +221,8 @@ class jsonlines:
     def read(self, *args, **kwargs):
         #print("jsonlines.read()")
         read = self.sock.read(*args, **kwargs)
-        while not read:
+        print("jsonlines.read() got ", read)
+        while not read or not read.strip():
             print("haven't read anything, trying again")
             time.sleep(0.2)
             read = self.sock.read(*args, **kwargs)
@@ -415,8 +416,8 @@ class LUCIDAC:
             halt_on_overload  = True,
             
             # default way of specifying the ic_time/op_time in nanoseconds
-            ic_time = 123456,
-            op_time = 234567,
+            ic_time = 0,
+            op_time = 0,
             
             # and additional ways of providing that time...
             ic_time_ns = 0,
@@ -471,8 +472,9 @@ class LUCIDAC:
     
     def send(self, msg_type, msg={}):
         "Sets up an envelope and sends it, but does not wait for reply"
+        #self.req_id += 1
+        self.req_id = str(uuid.uuid4())
         envelope = dict(id=self.req_id, type=msg_type, msg=msg)
-        self.req_id += 1
         self.sock.send(envelope)
         return envelope
     
@@ -838,7 +840,7 @@ class LUCIDAC:
             self.repetitive = repetitive
         return self.run_config
 
-    def start_run(self, clear_queue=True, **run_and_daq_config) -> Run:
+    def start_run(self, clear_queue=True, run_type="sleepy", **run_and_daq_config) -> Run:
         """
         Start a run on the LUCIDAC. A run is a IC/OP cycle. See :class:`Run` for details.
         In order to configurer the run, use :meth:`set_run` and :meth:`set_daq` before
@@ -865,7 +867,8 @@ class LUCIDAC:
             session = None,
             config = self.run_config,
             daq_config = self.daq_config,
-            clear_queue = clear_queue
+            clear_queue = clear_queue,
+            run_type = run_type,
         )
       
         # this is a hot-fix for being able to run guidebook examples with

@@ -37,6 +37,9 @@ r.probe(x,  front_port=0)
 r.probe(my, front_port=1)
 
 hc = LUCIDAC()
+hc.slurp()
 hc.set_config(r)
 
-hc.run(op_time_unlimited=True)
+#hc.run(op_time_unlimited=True)
+hc.manual_mode("ic")
+hc.manual_mode("op")

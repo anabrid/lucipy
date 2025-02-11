@@ -31,8 +31,8 @@ def sinus(i0, i1):
     
     rev1.route(i0, 2,  0.25, i1)
     rev1.route(i1, 3, -0.5,  i0)
-    rev1.probe(i0, front_port=6)
-    rev1.probe(i1, front_port=7)
+    rev1.probe(i0, front_port=0)
+    rev1.probe(i1, front_port=1)
 
     print(rev1)
 
@@ -81,8 +81,8 @@ def lane_sinus(lane0, lane1):
     rev1.route(i0, lane0,  1, i1)
     rev1.route(i1, lane1, -1,  i0)
  
-    rev1.probe(i0, front_port=6)
-    rev1.probe(i1, front_port=7)
+    rev1.probe(i0, front_port=0)
+    rev1.probe(i1, front_port=1)
 
     print(rev1)
 

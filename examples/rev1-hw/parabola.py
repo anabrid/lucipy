@@ -9,7 +9,7 @@ slow = True # test slow time constant
 
 t  = test.int(ic = +1, slow=slow, id=6)
 t2 = test.int(ic = -1, slow=slow, id=7)
-m  = test.mul(id=3)
+m  = test.mul(id=0)
 c  = test.const(1)
 
 l0, l1 = 0, 1
@@ -40,9 +40,9 @@ config = test.generate()
 
 if True:
     config["/0"]["/M1"]["calibration"] = {
-        "offset_x": [ 0.0   ,  -0.0049 ,  -0.007  ,  -0.005], # !!! offset_x = input B !!!
-        "offset_y": [ 0.1   ,   0.005  ,   0.004  ,   0.0  ], # !!! offset_y = input A !!!
-        "offset_z": [ -0.035,  -0.031  ,  -0.028  ,  -0.03 ],      
+        "offset_x": [ 0.0   ,   0.0    ,   0.0    ,   0.0  ], # !!! offset_x = input B !!!
+        "offset_y": [ 0.0   ,   0.0    ,   0.0    ,   0.0  ], # !!! offset_y = input A !!!
+        "offset_z": [ 0.0   ,   0.0    ,   0.0    ,   0.0  ],      
         "write_eeprom": True,
     }
     hc.circuit_options.mul_calib_kludge = False

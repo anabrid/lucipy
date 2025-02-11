@@ -25,8 +25,8 @@ c = ramp.const(1)
 ramp.route(c, lane, slope, i.a)
 ramp.route(c, lane+1, 10*slope, j.a)
 
-ramp.probe(i, front_port=5)
-ramp.probe(j, front_port=6)
+ramp.probe(i, front_port=0)
+ramp.probe(j, front_port=1)
 
 channel = ramp.measure(i)
 print(f"{channel=}")

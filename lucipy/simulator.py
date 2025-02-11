@@ -3,17 +3,17 @@ import sys, os, socket, select, threading, socketserver, json, functools, \
   operator, functools, time, datetime, copy, threading, multiprocessing
 
 """
-This package provides a simple Simulator for LUCIDAC which tries to align
+This module provides a simple Simulator for LUCIDAC which tries to align
 the LUCIDAC configuration (UCI matrix) as close as possible to the canonical
 formulation of a linear ODE problem. Since the LUCIDAC has the nonlinear
 multiplier elements, "loop unrolling" is performed at evaluation time.
 For a theoretical description, see the documentation :ref:`sim`.
 
-Furthermore, the package also provides a simple Emulator which exposes a
+Furthermore, the module also provides a simple Emulator which exposes a
 network service that emulates how LUCIDAC reacts to commands. This allows
 high level testing and evventualy swapping software against real hardware.
 
-The package requires numpy/scipy.
+The module requires numpy/scipy.
 """
 
 def split(array, nrows, ncols):

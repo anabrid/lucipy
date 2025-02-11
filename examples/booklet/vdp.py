@@ -36,9 +36,12 @@ vdp.measure(mdy)
 vdp.measure(y)
 
 hc = LUCIDAC()
-hc.set_circuit(vdp)
 
-hc.manual_mode("ic")
-from time import sleep
-sleep(0.3)
-hc.manual_mode("op")
+
+if 1:
+    hc.set_circuit(vdp)
+
+    hc.manual_mode("ic")
+    from time import sleep
+    sleep(0.3)
+    hc.manual_mode("op")
