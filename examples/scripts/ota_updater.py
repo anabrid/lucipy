@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from simplehc import HybridController
+from lucipy import LUCIDAC as HybridController
 
 import logging, sys, pathlib, subprocess, hashlib, datetime, time, base64
 log = logging.getLogger('hcota')
@@ -28,10 +28,10 @@ except ModuleNotFoundError:
             show(i+1)
         print("\n", flush=True, file=out)
 
-hc = HybridController("192.168.68.60", 5732)
+hc = HybridController() # expect the LUCIDAC_ENDPOINT env variable
 reset_running_upgrades = True
 
-builddir = pathlib.Path("/home/sven/Analog/Hardware/lucidac/firmware/hybrid-controller-dev/.pio/build/teensy41/")
+builddir = pathlib.Path("/home/koeppel/hybrid-controller/.pio/build/teensy41")
 elffile = builddir / "firmware.elf"
 binfile = builddir / "firmware.bin"
 log.info(f"Converting {elffile.name} ({elffile.stat().st_size} bytes) to {binfile.name}")
@@ -43,7 +43,7 @@ log.info(f"Preparing image {binfile.name} ({binimage_size} bytes) for upload..."
 
 binimage_hash = hashlib.sha256(binimage).hexdigest()
 
-cur_image = hc.query("status").flashimage
+cur_image = hc.query("sys_ident").fw_image
 log.info(f"Current old image at {hc} has {cur_image.size} bytes")
 log.info(f"Old Image Sha256 = {cur_image.sha256sum}")
 log.info(f"New Image Sha256 = {binimage_hash}")
