@@ -39,7 +39,9 @@ l.probe(mz, front_port=2)
 hc = LUCIDAC()
 hc.set_circuit(l)
 
-hc.set_op_time(unlimited=True)
-hc.start_run()
+#hc.set_op_time(unlimited=True)
+#hc.start_run()
+hc.run(op_time_unlimited=True)
+
 
 
