@@ -437,12 +437,12 @@ class LUCIDAC:
         #: Storage for additional configuration options which go next to each set_circuit call
         self.circuit_options = dotdict(
             # -> should all be moved into the firmware!
-            #reset_before=True,
-            #sh_kludge=True,
-            #mul_calib_kludge=True,
-            #calibrate_mblock=False,
-            #calibrate_offset=False,
-            #calibrate_routes=False,
+            reset_before=True,
+            sh_kludge=False,
+            mul_calib_kludge=False,
+            calibrate_mblock=True,
+            calibrate_offset=True,
+            calibrate_routes=True,
         )
         
         self.user = endpoint.user
