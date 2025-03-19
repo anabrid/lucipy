@@ -50,7 +50,10 @@ config = hc.generate()
 lucidac = LUCIDAC()
 lucidac.set_circuit(hc)
 
-lucidac.manual_mode("ic")
-from time import sleep
-sleep(0.5)
-lucidac.manual_mode("op")
+#lucidac.manual_mode("ic")
+#from time import sleep
+#sleep(0.5)
+#lucidac.manual_mode("op")
+
+lucidac.run(op_time_unlimited=True)
+
