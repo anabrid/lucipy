@@ -547,7 +547,7 @@ class Emulation:
         return self.get_circuit()
     
     @expose
-    def set_circuit(self, entity, config, reset_before=False, sh_kludge=None, calibrate_mblock=None, calibrate_offset=None, calibrate_routes=None):
+    def set_circuit(self, entity, config, reset_before=False, sh_kludge=None, calibrate_mblock=None, calibrate_offset=None, calibrate_routes=None, mul_calib_kludge=None):
         """
         Set circuit configuration.
         

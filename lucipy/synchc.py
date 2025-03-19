@@ -221,7 +221,7 @@ class jsonlines:
     def read(self, *args, **kwargs):
         #print("jsonlines.read()")
         read = self.sock.read(*args, **kwargs)
-        print("jsonlines.read() got ", read)
+        #print("jsonlines.read() got ", read)
         while not read or not read.strip():
             print("haven't read anything, trying again")
             time.sleep(0.2)
@@ -709,8 +709,11 @@ class LUCIDAC:
         
         >>> hc = LUCIDAC("emu:/")
         >>> hc.set_by_path(["0", "M0"], {"elements":{0: {"ic":0.23, "k":100} } })
+        ...
         >>> hc.set_by_path("/0/M0",     {"elements":{0: {"ic":0.23, "k":100} } })
+        ...
         >>> hc.set_by_path("/0/M0//elements/0",         {"ic":0.23, "k":100})
+        ...
         >>> hc.get_circuit()["config"]["/0"]["/M0"]["elements"]["0"]
         {'ic': 0.23, 'k': 100}
 
