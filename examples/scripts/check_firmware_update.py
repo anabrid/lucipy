@@ -6,7 +6,8 @@
 #
 
 from lucipy import LUCIDAC
-import re, json, urllib # python-included
+import re, json
+import urllib.request
 
 hc = LUCIDAC()
 

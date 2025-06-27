@@ -507,7 +507,7 @@ class Routing(Probes):
     def __init__(self, routes: List[Route] = None, accept_dirty=False, **kwargs):
         super().__init__(**kwargs)  # forwards all unused arguments
         self.routes = []
-        self.u_constant = None
+        self.u_constant = False
         self.accept_dirty = accept_dirty
         if routes:
             self.add(routes)
@@ -731,7 +731,7 @@ class Routing(Probes):
         self.routes.append(new_route)
         return new_route
 
-    def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight=1):
+    def connect(self, source:Union[Ele,int], target:Union[Ele,int], weight:float=1):
         """
         Syntactic sugar for adding a :func:`Connection`.
         :returns: The generated Route.
@@ -1246,7 +1246,7 @@ class Circuit(Reservoir, MIntBlock, Routing):
     def __init__(self, routes: List[Route] = [], accept_dirty=False):
         super().__init__(routes=routes, accept_dirty=accept_dirty)
     
-    def int(self, *, id=None, ic=0, slow=False):
+    def int(self, *, id=None, ic:float=0, slow=False):
         "Allocate an Integrator and set it's initial conditions and k0 factor at the same time."
         el = Reservoir.int(self, id)
         self.set_ic(el, ic)

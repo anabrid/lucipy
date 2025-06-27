@@ -40,7 +40,7 @@ def test_empty_configuration(hc):
 # tests the protocol and configuration readout
 @requires_hardware
 def test_set_circuit_for_cluster(hc):
-    set_conf_cluster = circuit_sinus().generate(skip="/M1") # Test Hardware has no M1!)
+    set_conf_cluster = circuit_sinus().generate()
     hc.set_circuit(set_conf_cluster)
     get_conf_cluster = hc.get_circuit()["config"]
            
@@ -48,12 +48,9 @@ def test_set_circuit_for_cluster(hc):
     for i,v in enumerate(get_conf_cluster["/0"]["/I"]["outputs"]):
         if not v:
             get_conf_cluster["/0"]["/I"]["outputs"][i] = []
-            
-    # for the moment, get rid of U constant output. TODO Needs treatment!
-    del get_conf_cluster["/0"]["/U"]["constant"]
-    
-    # get rid of M1 block
-    del get_conf_cluster["/0"]["/M1"]
+
+    # get rid of elements in the M1 block
+    del get_conf_cluster["/0"]["/M1"]["calibration"]
     
     # get rid of SH block
     if "/SH" in get_conf_cluster["/0"]:
@@ -64,6 +61,10 @@ def test_set_circuit_for_cluster(hc):
     
     ## Differences are still in the U-block. Look carefully.
     ## Probably we have an old an unsuitable commit.
+
+    import json
+    print(json.dumps(set_conf_cluster["/0"], indent=2))
+    print(json.dumps(get_conf_cluster["/0"], indent=2))
     
     assert set_conf_cluster["/0"] == get_conf_cluster["/0"]
 
