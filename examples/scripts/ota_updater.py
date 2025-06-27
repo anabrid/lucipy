@@ -2,7 +2,7 @@
 
 from lucipy import LUCIDAC as HybridController
 
-import logging, sys, pathlib, subprocess, hashlib, datetime, time, base64
+import logging, sys, pathlib, subprocess, hashlib, datetime, time, base64, os
 log = logging.getLogger('hcota')
 now = datetime.datetime.now().isoformat()
 
@@ -31,7 +31,7 @@ except ModuleNotFoundError:
 hc = HybridController() # expect the LUCIDAC_ENDPOINT env variable
 reset_running_upgrades = True
 
-builddir = pathlib.Path("/home/koeppel/hybrid-controller/.pio/build/teensy41")
+builddir = pathlib.Path(os.getcwd())
 elffile = builddir / "firmware.elf"
 binfile = builddir / "firmware.bin"
 log.info(f"Converting {elffile.name} ({elffile.stat().st_size} bytes) to {binfile.name}")

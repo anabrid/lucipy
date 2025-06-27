@@ -26,7 +26,7 @@ The main class to use from this module is :class:`LUCIDAC`.
 
 # all this is only python standard library  :)
 import logging, time, socket, select, json, types, typing, \
-    itertools, os, functools, collections, uuid, time
+    itertools, os, functools, collections, uuid, time, warnings
 log = logging.getLogger('synchc')
 logging.basicConfig(level=logging.INFO)
 
@@ -272,8 +272,13 @@ class Run:
     
     def __init__(self, hc):
         self.hc = hc
+
+        # in newer versions of the firmware, when `sample_op_end` is set in the
+        # run_config, the state of all M-elements is sent - when reading messages,
+        # we store this data separately from the data during the run
+        self.op_end_data = None
     
-    def next_data(self) -> typing.Iterator[typing.List[float]]:
+    def next_data(self, mark_op_end_by_none: bool = False) -> typing.Optional[typing.Iterator[typing.List[float]]]:
         """
         Reads next dataset from DAQ (data aquisiton) which is streamed during the run.
         A call to this function yields a single dataset once arrived. It returns
@@ -289,11 +294,21 @@ class Run:
         >>> assert all(hc.daq_config["num_channels"] == len(line) for line in lines)   # doctest: +SKIP
     
         This invariant is also asserted within the method.
+
+        :arg mark_op_end_by_none: For repetitive runs, if set, return a "None" entry
+            everytime an IC/OP cycle ended.
         """
         while True:
             envelope = self.hc.sock.read()
             if envelope["type"] == "run_data":
                 # TODO check for proper run id and entity.
+
+                if "state" in envelope["msg"] and envelope["msg"]["state"] == "OP_END":
+                    if self.op_end_data is None:
+                        self.op_end_data = []
+                    self.op_end_data.append(envelope["msg"]["data"])
+                    continue
+
                 msg_data = envelope["msg"]["data"]
                 assert all(self.hc.daq_config["num_channels"] == len(line) for line in msg_data)
                 yield msg_data
@@ -301,7 +316,11 @@ class Run:
                 msg_old = envelope["msg"]["new"]
                 msg_new = envelope["msg"]["new"]
                 if msg_new == "DONE":
-                    break # successfully transfered all data
+                    if self.hc.run_config.repetitive:
+                        if mark_op_end_by_none:
+                            yield None
+                    else:
+                        break # computation was stopped or or circuit run was done
                 if msg_new == "ERROR":
                     # TODO: This is actually a RemoteError,
                     #  but since we don't get a proper envelope but some weird extra message
@@ -342,6 +361,40 @@ class Run:
         if len(res) == 0 and not empty_is_fine:
             raise LocalError("Expected data stream but got not a single data point")
         return res
+    
+    def op_end_state(self) -> typing.Optional[typing.List[typing.List[float]]]:
+        """
+        When `sample_op_end` in the run config is `True`, the device will 
+        return the M-block's satte, i.e. its outputs at the end of the OP-cycle.
+
+        :return M-outputs at the end of the OP_cycle.
+        """
+        return self.op_end_data
+    
+    def stop(self) -> bool:
+        """
+        Stops a current run. This is meant for repetitive runs.
+
+        :return True if the computation was stopped, False if there was an error.
+        """
+
+        # while the run is active, other messages could be sent in between this
+        # query and the `stop_run` answer, hence don't assume that the next message
+        # is the confirmation
+        self.hc.query("stop_run", {
+            "end_repetitive": True
+        },
+        ignore_response = True)
+
+        # reads remaining messages until a `stop_run` confirmation is sent
+        while True:
+            envelope = self.hc.sock.read()
+
+            if envelope['type'] == "stop_run":
+                return (envelope["code"] == 0)
+            else:
+                # ignore other enevlopes for now
+                pass
 
 class LUCIDAC:
     """
@@ -408,7 +461,6 @@ class LUCIDAC:
         
         #: Ethernet Mac address of Microcontroller, required for the circuit entity hierarchy
         self.hc_mac = None
-        # TODO: Maybe change firmware once in a way that it doesn't really need the client to know it
         
         #: Storage for stateful preparation of runs.
         self.run_config = dotdict(
@@ -419,17 +471,9 @@ class LUCIDAC:
             ic_time = 0,
             op_time = 0,
             
-            # and additional ways of providing that time...
-            ic_time_ns = 0,
-            ic_time_us = 0,
-            ic_time_ms = 0,
-            ic_time_sec = 0,
-            op_time_ns = 0,
-            op_time_us = 0,
-            op_time_ms = 0,
-            op_time_sec = 0,
-            
-            unlimited_op_time = False
+            # repetitive or unlimited runs
+            unlimited_op_time = False,
+            repetitive = False
         )
 
         #: Storage for stateful preparation of runs.
@@ -441,11 +485,12 @@ class LUCIDAC:
         )
         
         #: Storage for additional configuration options which go next to each set_circuit call
+        # Note: this causes issues with the current mainline firmware, so it is not send for now
         self.circuit_options = dotdict(
             # -> should all be moved into the firmware!
             reset_before=True,
-            sh_kludge=False,
-            mul_calib_kludge=False,
+            sh_kludge=True,
+            mul_calib_kludge=True,
             calibrate_mblock=True,
             calibrate_offset=True,
             calibrate_routes=True,
@@ -498,10 +543,12 @@ class LUCIDAC:
             log.error(f"req(type={sent_envelope.type}) received unexpected: {resp=}")
             return resp
 
-    def query(self, msg_type , msg={}, ignore_run_state_change=True):
+    def query(self, msg_type , msg={}, ignore_run_state_change=True, ignore_response=False):
         "Sends a query and waits for the answer, returns that answer"
         envelope = dotdict(self.send(msg_type, msg))
-        return self._recv(envelope)
+
+        if not ignore_response:
+            return self._recv(envelope)
     
     def slurp(self):
         """
@@ -601,10 +648,11 @@ class LUCIDAC:
             config =  carrier_config
         )
         
-        outer_config = {**outer_config, **self.circuit_options}
+        # note: with the current mainline firmware, sending these options results
+        # in incorrent results - thus, we skip this for now
+        # outer_config = {**outer_config, **self.circuit_options}
+
         outer_config = {**outer_config, **further_commands}
-        
-        #print(f"set_circuit {outer_config=}")
 
         if "/0" in carrier_config:
             cluster_config = carrier_config["/0"]
@@ -826,6 +874,8 @@ class LUCIDAC:
         :param op_time: Request time for simulation, in nanoseconds. This is the most important
            option for this method. Note that by a current limitation in the hardware, only
            op_times < 1sec are supported.
+        :param streaming Runs FlexIO code (currently always activated).
+        :param repetitive: Loops between IC and OP mode until the user sends the stop_run command.
         """
         if halt_on_external_trigger != None:
             self.run_config.halt_on_external_trigger = halt_on_external_trigger
@@ -839,11 +889,12 @@ class LUCIDAC:
             self.run_config.unlimited_op_time = unlimited_op_time
         if streaming != None:
             self.run_config.streaming = streaming
+            warnings.warn("Streaming parameter is currently ignored by the firmware.")
         if repetitive != None:
-            self.repetitive = repetitive
+            self.run_config.repetitive = repetitive
         return self.run_config
 
-    def start_run(self, clear_queue=True, run_type="sleepy", **run_and_daq_config) -> Run:
+    def start_run(self, clear_queue=True, end_repetitive=True, run_type="sleepy", **run_and_daq_config) -> Run:
         """
         Start a run on the LUCIDAC. A run is a IC/OP cycle. See :class:`Run` for details.
         In order to configurer the run, use :meth:`set_run` and :meth:`set_daq` before
@@ -871,6 +922,7 @@ class LUCIDAC:
             config = self.run_config,
             daq_config = self.daq_config,
             clear_queue = clear_queue,
+            end_repetitive = end_repetitive,
             run_type = run_type,
         )
       
@@ -910,7 +962,7 @@ class LUCIDAC:
 for cmd in LUCIDAC.commands:
     shorthand = (lambda cmd: lambda self, msg={}: self.query(cmd, msg))(cmd)
     shorthand.__doc__ = f'Shorthand for ``query("{cmd}", msg)``, see :meth:`query`.'
-    #shorthand = types.MethodType(shorthand, self) # bind function
+
     if hasattr(functools, "cache") and cmd in LUCIDAC.memoizable:
         shorthand = functools.cache(shorthand)
     if not hasattr(LUCIDAC, cmd):
